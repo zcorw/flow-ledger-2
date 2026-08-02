@@ -75,7 +75,7 @@ Flow Ledger 是一个面向个人私有使用的资金资产管理 Web 应用。
   Depends on: T000。
   Verify: `docker compose up` 后前端可访问，`GET /api/v1/system/health` 正常，首个 Alembic 迁移可执行。
 
-- [ ] T002 [P0] 实现首次初始化与认证
+- [x] T002 [P0] 实现首次初始化与认证
   Goal: 无用户系统只能初始化管理员，初始化完成后仅可登录访问业务页面。
   Notes: 校验一次性 `BOOTSTRAP_TOKEN`，哈希密码，初始化默认币种、现金机构和应用配置，采用 HTTP-only cookie。
   Likely files/modules: frontend auth/setup routes；backend users/auth/setup models, schemas, services, routes, migration。

@@ -3,6 +3,7 @@ from functools import lru_cache
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.config import get_settings
 
@@ -11,7 +12,15 @@ from app.core.config import get_settings
 def get_engine() -> Engine:
     database_url = get_settings().database_url
     connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-    return create_engine(database_url, pool_pre_ping=True, connect_args=connect_args)
+    engine_kwargs = (
+        {"poolclass": StaticPool} if database_url == "sqlite+pysqlite:///:memory:" else {}
+    )
+    return create_engine(
+        database_url,
+        pool_pre_ping=True,
+        connect_args=connect_args,
+        **engine_kwargs,
+    )
 
 
 def get_session_factory() -> sessionmaker[Session]:
