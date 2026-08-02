@@ -8,6 +8,8 @@ export type User = {
 };
 
 export type LoginInput = { email: string; password: string };
+export type UpdateProfileInput = { displayName: string };
+export type ChangePasswordInput = { currentPassword: string; newPassword: string };
 export type BootstrapInput = {
   bootstrapToken: string;
   email: string;
@@ -17,6 +19,10 @@ export type BootstrapInput = {
 
 export const getSetupStatus = () => apiRequest<{ requires_setup: boolean }>('/setup/status');
 export const getMe = () => apiRequest<User>('/auth/me');
+export const updateProfile = (input: UpdateProfileInput) =>
+  apiRequest<User>('/auth/profile', { method: 'PATCH', body: JSON.stringify(input) });
+export const changePassword = (input: ChangePasswordInput) =>
+  apiRequest<User>('/auth/change-password', { method: 'POST', body: JSON.stringify(input) });
 export const login = (input: LoginInput) =>
   apiRequest<User>('/auth/login', { method: 'POST', body: JSON.stringify(input) });
 export const bootstrap = (input: BootstrapInput) =>

@@ -12,7 +12,12 @@ from app.db.session import get_db
 from app.models.audit import AuditLog
 from app.models.auth import AuthSession
 from app.models.user import User
-from app.schemas.auth import ChangePasswordRequest, LoginRequest, UserResponse
+from app.schemas.auth import (
+    ChangePasswordRequest,
+    LoginRequest,
+    UpdateProfileRequest,
+    UserResponse,
+)
 from app.services.auth import (
     clear_session_cookie,
     create_session,
@@ -70,6 +75,29 @@ def logout(request: Request, response: Response, db: DbDependency) -> None:
 @router.get("/me", response_model=UserResponse)
 def me(auth: CurrentAuthDependency, db: DbDependency) -> UserResponse:
     db.commit()
+    return UserResponse.model_validate(auth.user)
+
+
+@router.patch("/profile", response_model=UserResponse)
+def update_profile(
+    payload: UpdateProfileRequest,
+    auth: CurrentAuthDependency,
+    db: DbDependency,
+) -> UserResponse:
+    previous_name = auth.user.display_name
+    auth.user.display_name = payload.display_name
+    db.add(
+        AuditLog(
+            user_id=auth.user.id,
+            action="auth.profile_updated",
+            entity_type="user",
+            entity_id=auth.user.id,
+            before_data={"displayName": previous_name},
+            after_data={"displayName": auth.user.display_name},
+        )
+    )
+    db.commit()
+    db.refresh(auth.user)
     return UserResponse.model_validate(auth.user)
 
 

@@ -1,6 +1,12 @@
 import uuid
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
+
+DisplayName = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=100),
+]
 
 
 class UserResponse(BaseModel):
@@ -19,13 +25,8 @@ class SetupStatusResponse(BaseModel):
 class BootstrapRequest(BaseModel):
     bootstrap_token: str = Field(min_length=1, alias="bootstrapToken")
     email: EmailStr
-    display_name: str = Field(min_length=1, max_length=100, alias="displayName")
+    display_name: DisplayName = Field(alias="displayName")
     password: str = Field(min_length=12, max_length=256)
-
-    @field_validator("display_name")
-    @classmethod
-    def normalize_display_name(cls, value: str) -> str:
-        return value.strip()
 
 
 class LoginRequest(BaseModel):
@@ -36,3 +37,7 @@ class LoginRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=1, alias="currentPassword")
     new_password: str = Field(min_length=12, max_length=256, alias="newPassword")
+
+
+class UpdateProfileRequest(BaseModel):
+    display_name: DisplayName = Field(alias="displayName")

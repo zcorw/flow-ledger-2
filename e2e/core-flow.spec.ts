@@ -125,6 +125,41 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await expectNoSeriousAccessibilityIssues(page, 'mobile-dashboard');
 
   await page.setViewportSize({ width: 1280, height: 720 });
+  await page.getByRole('button', { name: '设置' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: '设置' })).toBeVisible();
+
+  const profileForm = page.getByRole('form', { name: '修改账户资料' });
+  await profileForm.getByLabel('显示名称').fill('E2E 管理员');
+  const profileResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/v1/auth/profile') && response.request().method() === 'PATCH',
+  );
+  await profileForm.getByRole('button', { name: '保存显示名称' }).click();
+  expect((await profileResponsePromise).status()).toBe(200);
+  await expect(page.getByText('显示名称已更新')).toBeVisible();
+  await expect(page.getByText('E2E 管理员', { exact: true }).first()).toBeVisible();
+
+  const passwordForm = page.getByRole('form', { name: '修改密码' });
+  await passwordForm.getByLabel('当前密码').fill('e2e-password-123');
+  await passwordForm.getByLabel('新密码', { exact: true }).fill('e2e-password-456');
+  await passwordForm.getByLabel('确认新密码').fill('e2e-password-456');
+  const passwordResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/v1/auth/change-password') &&
+      response.request().method() === 'POST',
+  );
+  await passwordForm.getByRole('button', { name: '更新密码' }).click();
+  expect((await passwordResponsePromise).status()).toBe(200);
+  await expect(page.getByText('密码已更新，其他登录会话已退出')).toBeVisible();
+  await expectNoSeriousAccessibilityIssues(page, 'account-settings');
+
+  await page.getByRole('button', { name: '退出登录' }).click();
+  await expect(page.getByRole('heading', { name: '登录 Flow Ledger' })).toBeVisible();
+  await page.getByLabel('邮箱地址').fill('e2e@example.com');
+  await page.getByLabel('密码').fill('e2e-password-456');
+  await page.getByRole('button', { name: '登录' }).click();
+  await expect(page.getByRole('heading', { level: 4, name: '首页看板' })).toBeVisible();
+  await expect(page.getByText('E2E 管理员', { exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: '退出登录' }).click();
   await expect(page.getByRole('heading', { name: '登录 Flow Ledger' })).toBeVisible();
   await page.goto('/institutions');

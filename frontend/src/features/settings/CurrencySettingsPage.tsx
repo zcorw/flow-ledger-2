@@ -5,6 +5,7 @@ import { Alert, Box, Button, Chip, CircularProgress, Paper, Snackbar, Stack, Swi
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ApiClientError } from '../../api/client';
+import { AccountProfileSettings } from './AccountProfileSettings';
 import { getCurrencies, getFxSyncRuns, getLatestRates, syncFxRates, updateCurrencies } from './api';
 import { toggleCurrency } from './currencyState';
 import { OperationsSettings } from './OperationsSettings';
@@ -13,7 +14,7 @@ const currencyColors: Record<string, { bg: string; fg: string }> = {
   CNY: { bg: '#e7f4f0', fg: '#176c5a' },
   USD: { bg: '#e8f2f5', fg: '#397c93' },
   JPY: { bg: '#fae9e7', fg: '#a94f49' },
-  HKD: { bg: '#fbf1de', fg: '#9b6a22' },
+  HKD: { bg: '#fbf1de', fg: '#765015' },
   EUR: { bg: '#ece9f5', fg: '#66558c' },
 };
 
@@ -57,7 +58,9 @@ export function CurrencySettingsPage() {
 
   return (
     <Stack spacing={2.5} sx={{ maxWidth: 980, mx: 'auto' }}>
-      <Box><Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>币种与汇率</Typography><Typography sx={{ mt: 0.5, color: 'text.secondary', fontSize: 13 }}>配置资产使用的币种，并管理历史 CNY 折算汇率。</Typography></Box>
+      <Box><Typography variant="h4" component="h1" sx={{ fontWeight: 780 }}>设置</Typography><Typography sx={{ mt: 0.5, color: 'text.secondary', fontSize: 13 }}>管理账户安全、币种汇率以及数据导入导出。</Typography></Box>
+      <AccountProfileSettings />
+      <Box sx={{ pt: 1 }}><Typography variant="h5" component="h2" sx={{ fontWeight: 700 }}>币种与汇率</Typography><Typography sx={{ mt: 0.5, color: 'text.secondary', fontSize: 13 }}>配置资产使用的币种，并管理历史 CNY 折算汇率。</Typography></Box>
       {error && <Alert severity="error">{error instanceof ApiClientError ? error.message : '操作失败'}</Alert>}
       <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2.5 }}>
         <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>

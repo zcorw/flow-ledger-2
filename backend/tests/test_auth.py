@@ -83,6 +83,16 @@ def test_login_logout_and_password_change_flow() -> None:
         assert login.status_code == 200
         assert "HttpOnly" in login.headers["set-cookie"]
 
+        wrong_current = client.post(
+            "/api/v1/auth/change-password",
+            json={
+                "currentPassword": "wrong-password",
+                "newPassword": "an-even-stronger-password-456",
+            },
+        )
+        assert wrong_current.status_code == 400
+        assert wrong_current.json()["error"]["code"] == "INVALID_CURRENT_PASSWORD"
+
         unchanged = client.post(
             "/api/v1/auth/change-password",
             json={
@@ -113,3 +123,33 @@ def test_login_logout_and_password_change_flow() -> None:
             json={"email": "admin@example.com", "password": "an-even-stronger-password-456"},
         )
         assert new_login.status_code == 200
+
+
+def test_profile_update_normalizes_name_and_writes_audit_log() -> None:
+    with TestClient(app) as client:
+        anonymous = client.patch(
+            "/api/v1/auth/profile", json={"displayName": "Admin"}
+        )
+        assert anonymous.status_code == 401
+        client.post("/api/v1/setup/bootstrap", json=bootstrap_payload())
+
+        blank = client.patch("/api/v1/auth/profile", json={"displayName": "   "})
+        assert blank.status_code == 422
+
+        updated = client.patch(
+            "/api/v1/auth/profile",
+            json={"displayName": "  私有管理员  "},
+        )
+        assert updated.status_code == 200
+        assert updated.json()["display_name"] == "私有管理员"
+        assert client.get("/api/v1/auth/me").json()["display_name"] == "私有管理员"
+
+    with get_session_factory()() as db:
+        user = db.scalar(select(User).where(User.email == "admin@example.com"))
+        assert user is not None and user.display_name == "私有管理员"
+        profile_log = db.scalar(
+            select(AuditLog).where(AuditLog.action == "auth.profile_updated")
+        )
+        assert profile_log is not None
+        assert profile_log.before_data == {"displayName": "Admin"}
+        assert profile_log.after_data == {"displayName": "私有管理员"}
