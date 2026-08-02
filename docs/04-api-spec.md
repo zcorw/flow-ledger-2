@@ -279,6 +279,8 @@ API 前缀：`/api/v1`
 - monthly_snapshot
 - debt_event
 
+下载的 CSV 模板在示例数据后提供以 `#` 开头的可选值参考行，列出各类型、流动性和风险字段允许填写的系统值及中文含义。参考行在校验和导入时自动忽略，可以保留在文件中。
+
 ### POST /imports/{type}/validate
 
 上传文件并校验，不写入数据库。
@@ -319,4 +321,3 @@ API 前缀：`/api/v1`
 ### GET /system/health
 
 返回 API、数据库、调度器、最近汇率同步状态。
-

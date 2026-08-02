@@ -112,6 +112,45 @@ ACCOUNT_TYPES = {
 ASSET_TYPES = {"bank_deposit", "cash", "securities"}
 LIQUIDITY_LEVELS = {"t0", "within_7d", "within_30d", "within_90d", "locked_or_unknown"}
 RISK_LEVELS = {"low", "medium", "high"}
+REFERENCE_ROWS = {
+    "institution_account_project": [
+        "# 参考说明：以下以 # 开头的行仅提供可选值，导入时会自动忽略，可以保留",
+        "# record_type（记录类型）：institution（机构） | account（账户） | project（项目）",
+        (
+            "# institution_type（机构类型）：bank（银行） | broker（券商） | "
+            "cash（现金） | person（个人） | other（其他）"
+        ),
+        (
+            "# account_type（账户类型）：savings（储蓄账户） | "
+            "wealth_management（理财账户） | brokerage（证券账户） | "
+            "cash_wallet（现金钱包） | loan_related（借贷相关） | other（其他）"
+        ),
+        "# asset_type（资产类型）：bank_deposit（银行存款） | cash（现金） | securities（证券）",
+        (
+            "# liquidity_level（流动性）：t0（随时可用） | within_7d（7 天内） | "
+            "within_30d（30 天内） | within_90d（90 天内） | "
+            "locked_or_unknown（锁定或未知）"
+        ),
+        "# risk_level（风险等级）：low（低风险） | medium（中风险） | high（高风险）",
+    ],
+    "monthly_snapshot": [
+        "# 参考说明：以下以 # 开头的行仅提供可选值，导入时会自动忽略，可以保留",
+        (
+            "# liquidity_level（流动性）：t0（随时可用） | within_7d（7 天内） | "
+            "within_30d（30 天内） | within_90d（90 天内） | "
+            "locked_or_unknown（锁定或未知）"
+        ),
+        "# risk_level（风险等级）：low（低风险） | medium（中风险） | high（高风险）",
+    ],
+    "debt_event": [
+        "# 参考说明：以下以 # 开头的行仅提供可选值，导入时会自动忽略，可以保留",
+        "# debt_type（债权债务类型）：receivable（债权/应收） | payable（债务/应付）",
+        (
+            "# event_type（事件类型）：issue（新增） | repayment（还款） | "
+            "adjustment（调整） | settle（结清）"
+        ),
+    ],
+}
 
 
 def template_csv(import_type: str) -> str:
@@ -119,6 +158,7 @@ def template_csv(import_type: str) -> str:
     writer = csv.writer(output, lineterminator="\n")
     writer.writerow(HEADERS[import_type])
     writer.writerows(EXAMPLES[import_type])
+    writer.writerows([[reference] for reference in REFERENCE_ROWS[import_type]])
     return "\ufeff" + output.getvalue()
 
 
@@ -139,6 +179,9 @@ def parse_csv(
         return [], [{"row": 1, "field": field, "reason": "存在未知列"} for field in unexpected]
     rows: list[dict[str, str]] = []
     for index, raw in enumerate(reader, 2):
+        first_value = raw.get(HEADERS[import_type][0]) or ""
+        if first_value.lstrip().startswith("#"):
+            continue
         if raw.get(None):
             _error(errors, index, "file", "数据列数超过表头")
             continue

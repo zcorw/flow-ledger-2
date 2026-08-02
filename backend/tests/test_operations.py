@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from app.db.session import get_session_factory
 from app.models.audit import AuditLog
 from app.models.operations import BackupExport
+from app.services.imports import EXAMPLES, parse_csv
 
 PASSWORD = "correct-horse-battery-staple"
 
@@ -84,14 +85,25 @@ def hierarchy_csv(bank: str = "Imported Bank") -> str:
 def test_three_import_types_and_error_reports(client: TestClient) -> None:
     assert client.get("/api/v1/imports/templates/monthly_snapshot").status_code == 401
     bootstrap(client)
-    for import_type in (
-        "institution_account_project",
-        "monthly_snapshot",
-        "debt_event",
-    ):
+    expected_references = {
+        "institution_account_project": [
+            "record_type（记录类型）",
+            "institution_type（机构类型）",
+            "account_type（账户类型）",
+            "asset_type（资产类型）",
+        ],
+        "monthly_snapshot": ["liquidity_level（流动性）", "risk_level（风险等级）"],
+        "debt_event": ["debt_type（债权债务类型）", "event_type（事件类型）"],
+    }
+    for import_type, references in expected_references.items():
         template = client.get(f"/api/v1/imports/templates/{import_type}")
         assert template.status_code == 200
         assert template.content.startswith(b"\xef\xbb\xbf")
+        template_text = template.content.decode("utf-8-sig")
+        assert all(reference in template_text for reference in references)
+        rows, errors = parse_csv(import_type, template.content)
+        assert errors == []
+        assert len(rows) == len(EXAMPLES[import_type])
 
     missing_columns = csv_upload(
         client,
