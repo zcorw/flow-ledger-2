@@ -1,4 +1,17 @@
-import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { expect, test, type Page } from '@playwright/test';
+
+async function expectNoSeriousAccessibilityIssues(page: Page, name: string) {
+  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  await test.info().attach(`axe-${name}.json`, {
+    body: JSON.stringify(results, null, 2),
+    contentType: 'application/json',
+  });
+  const blocking = results.violations.filter(
+    (violation) => violation.impact === 'critical' || violation.impact === 'serious',
+  );
+  expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
+}
 
 test('initializes, records an asset snapshot, verifies the dashboard, and logs out', async ({
   context,
@@ -6,6 +19,7 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
 }) => {
   await page.goto('/setup');
   await expect(page.getByRole('heading', { name: '初始化管理员' })).toBeVisible();
+  await expectNoSeriousAccessibilityIssues(page, 'setup');
   await page.getByLabel('Bootstrap Token').fill('e2e-bootstrap-token');
   await page.getByLabel('显示名称').fill('E2E Admin');
   await page.getByLabel('管理员邮箱').fill('e2e@example.com');
@@ -24,6 +38,7 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await expect(
     page.getByRole('heading', { level: 4, name: '首页看板', exact: true }),
   ).toBeVisible();
+  await expectNoSeriousAccessibilityIssues(page, 'dashboard-empty');
 
   await page.getByRole('button', { name: '机构与账户' }).click();
   await expect(
@@ -47,6 +62,8 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await page.getByRole('dialog').getByLabel('名称').fill('E2E Balance');
   await page.getByRole('dialog').getByRole('button', { name: '保存' }).click();
   await expect(page.getByText('E2E Balance', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expectNoSeriousAccessibilityIssues(page, 'master-data');
 
   await page.getByRole('button', { name: '月度快照' }).click();
   await page.getByLabel('快照日期').fill('2026-07-31');
@@ -58,13 +75,45 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await amountCell.getByRole('spinbutton').press('Tab');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('月度快照已保存')).toBeVisible();
+  await expectNoSeriousAccessibilityIssues(page, 'snapshot-grid');
 
   await page.getByRole('button', { name: '首页看板' }).click();
+  await expect(
+    page.getByRole('heading', { level: 4, name: '首页看板', exact: true }),
+  ).toBeVisible();
   await page.getByLabel('快照日期').fill('2026-07-31');
   await expect(page.getByText('¥12,346').first()).toBeVisible();
   await expect(page.getByText('当前总资产')).toBeVisible();
   await expect(page.getByText('当前净资产')).toBeVisible();
 
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { level: 4, name: '首页看板', exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: '跳到主要内容' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#main-content')).toBeFocused();
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const transitionDuration = await page.getByRole('button', { name: '退出登录' }).evaluate(
+    (element) => Number.parseFloat(getComputedStyle(element).transitionDuration),
+  );
+  expect(transitionDuration).toBeLessThanOrEqual(0.1);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const menuButton = page.getByRole('button', { name: '打开导航菜单' });
+  await expect(menuButton).toBeVisible();
+  await menuButton.click();
+  await expect(page.getByRole('navigation', { name: '主要导航' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('navigation', { name: '主要导航' })).not.toBeVisible();
+  await menuButton.click();
+  await page.getByRole('button', { name: '首页看板' }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expectNoSeriousAccessibilityIssues(page, 'mobile-dashboard');
+
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.getByRole('button', { name: '退出登录' }).click();
   await expect(page.getByRole('heading', { name: '登录 Flow Ledger' })).toBeVisible();
   await page.goto('/institutions');

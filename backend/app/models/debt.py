@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Date, ForeignKey, Numeric, String, Text, Uuid
+from sqlalchemy import Date, ForeignKey, Index, Numeric, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -11,6 +11,7 @@ from app.models.common import TimestampMixin, UUIDPrimaryKeyMixin
 
 class DebtItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "debt_items"
+    __table_args__ = (Index("ix_debt_items_user_type_status", "user_id", "debt_type", "status"),)
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True
@@ -24,6 +25,7 @@ class DebtItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class DebtEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "debt_events"
+    __table_args__ = (Index("ix_debt_events_item_date", "debt_item_id", "event_date"),)
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True

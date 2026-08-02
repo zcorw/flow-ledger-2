@@ -2,7 +2,17 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import (
+    Boolean,
+    Date,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -30,7 +40,10 @@ class Account(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "projects"
-    __table_args__ = (UniqueConstraint("account_id", "name", name="uq_project_account_name"),)
+    __table_args__ = (
+        UniqueConstraint("account_id", "name", name="uq_project_account_name"),
+        Index("ix_projects_user_account_active", "user_id", "account_id", "is_active"),
+    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True
@@ -51,6 +64,8 @@ class MonthlySnapshot(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "monthly_snapshots"
     __table_args__ = (
         UniqueConstraint("project_id", "snapshot_date", name="uq_snapshot_project_date"),
+        Index("ix_snapshots_user_date", "user_id", "snapshot_date"),
+        Index("ix_snapshots_user_project_date", "user_id", "project_id", "snapshot_date"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(

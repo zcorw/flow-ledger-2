@@ -7,6 +7,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      manifest: true,
+      chunkSizeWarningLimit: 600,
+    },
     server: {
       port: 5173,
       proxy: {

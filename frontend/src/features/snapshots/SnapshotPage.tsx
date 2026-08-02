@@ -3,7 +3,7 @@ import SaveOutlined from '@mui/icons-material/SaveOutlined';
 import UploadFileOutlined from '@mui/icons-material/UploadFileOutlined';
 import { Alert, Box, Button, Chip, Paper, Snackbar, Stack, TextField, Typography } from '@mui/material';
 import { DataGrid, type GridColDef, type GridRowModel } from '@mui/x-data-grid';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { ApiClientError } from '../../api/client';
 import { copyPreviousSnapshot, getSnapshotSheet, saveSnapshotSheet, type SnapshotRow } from './api';
@@ -16,8 +16,11 @@ export function SnapshotPage() {
   const [snapshotDate, setSnapshotDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [draft, setDraft] = useState<{ date: string; rows: GridSnapshotRow[] } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const sheetQuery = useQuery({ queryKey: ['snapshots', snapshotDate], queryFn: () => getSnapshotSheet(snapshotDate) });
-  const serverRows = (sheetQuery.data?.rows ?? []).map((row) => ({ ...row, grid_id: row.project_id }));
+  const sheetQuery = useQuery({ queryKey: ['snapshots', snapshotDate], queryFn: () => getSnapshotSheet(snapshotDate), placeholderData: keepPreviousData });
+  const serverRows = useMemo(
+    () => (sheetQuery.data?.rows ?? []).map((row) => ({ ...row, grid_id: row.project_id })),
+    [sheetQuery.data?.rows],
+  );
   const rows = draft?.date === snapshotDate ? draft.rows : serverRows;
 
   const copyMutation = useMutation({
@@ -61,7 +64,7 @@ export function SnapshotPage() {
     </Stack>
     {errorMessage && <Alert severity="error" sx={{ mb: 2 }}>{errorMessage}</Alert>}
     <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}><Chip color={(sheetQuery.data?.missing_project_ids.length ?? 0) > 0 ? 'warning' : 'success'} label={`缺失 ${(sheetQuery.data?.missing_project_ids.length ?? 0)} 项`} /><Chip color={warningCount > 0 ? 'warning' : 'default'} label={`异常变化提示 ${warningCount} 项`} /><Typography color="text.secondary" sx={{ alignSelf: 'center', fontSize: 12 }}>双击可编辑金额、流动性、风险和备注</Typography></Stack>
-    <Paper variant="outlined" sx={{ height: 600, borderRadius: 2.5, overflow: 'hidden' }}><DataGrid rows={rows} columns={columns} getRowId={(row) => row.grid_id} processRowUpdate={processRowUpdate} loading={sheetQuery.isLoading} disableRowSelectionOnClick showToolbar /></Paper>
+    <Paper variant="outlined" sx={{ height: 600, borderRadius: 2.5, overflow: 'hidden' }}><DataGrid aria-label="月度快照编辑表格" rows={rows} columns={columns} getRowId={(row) => row.grid_id} processRowUpdate={processRowUpdate} loading={sheetQuery.isLoading} disableRowSelectionOnClick rowBufferPx={320} showToolbar /></Paper>
     <Snackbar open={Boolean(notice)} autoHideDuration={3000} onClose={() => setNotice(null)} message={notice} />
   </Box>;
 }

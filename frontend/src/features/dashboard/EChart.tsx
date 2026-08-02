@@ -1,16 +1,74 @@
 import { Box } from '@mui/material';
-import * as echarts from 'echarts';
-import { useEffect, useRef } from 'react';
+import { BarChart, LineChart, PieChart } from 'echarts/charts';
+import {
+  AriaComponent,
+  GridComponent,
+  LegendComponent,
+  TitleComponent,
+  TooltipComponent,
+} from 'echarts/components';
+import * as echarts from 'echarts/core';
+import type { EChartsCoreOption } from 'echarts/core';
+import { SVGRenderer } from 'echarts/renderers';
+import { useEffect, useRef, useState } from 'react';
 
-export function EChart({ option, height = 300 }: { option: echarts.EChartsOption; height?: number }) {
+echarts.use([
+  AriaComponent,
+  BarChart,
+  GridComponent,
+  LegendComponent,
+  LineChart,
+  PieChart,
+  SVGRenderer,
+  TitleComponent,
+  TooltipComponent,
+]);
+
+function useReducedMotion() {
+  const [reduced, setReduced] = useState(
+    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReduced(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  return reduced;
+}
+
+export function EChart({
+  option,
+  label,
+  height = 300,
+}: {
+  option: EChartsCoreOption;
+  label: string;
+  height?: number;
+}) {
   const container = useRef<HTMLDivElement>(null);
+  const chart = useRef<echarts.ECharts | null>(null);
+  const reducedMotion = useReducedMotion();
+
   useEffect(() => {
     if (!container.current) return;
-    const chart = echarts.init(container.current, undefined, { renderer: 'svg' });
-    chart.setOption(option);
-    const resize = () => chart.resize();
-    window.addEventListener('resize', resize);
-    return () => { window.removeEventListener('resize', resize); chart.dispose(); };
-  }, [option]);
-  return <Box ref={container} sx={{ width: '100%', height }} />;
+    const instance = echarts.init(container.current, undefined, { renderer: 'svg' });
+    chart.current = instance;
+    const observer = new ResizeObserver(() => instance.resize());
+    observer.observe(container.current);
+    return () => {
+      observer.disconnect();
+      instance.dispose();
+      chart.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    chart.current?.setOption(
+      { ...option, animation: !reducedMotion, aria: { enabled: true } },
+      { notMerge: true, lazyUpdate: true },
+    );
+  }, [option, reducedMotion]);
+
+  return <Box ref={container} role="img" aria-label={label} sx={{ width: '100%', height }} />;
 }

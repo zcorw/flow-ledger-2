@@ -9,9 +9,11 @@
     "typecheck": "pnpm --filter @flow-ledger/frontend typecheck",
     "test": "pnpm --filter @flow-ledger/frontend test",
     "build": "pnpm --filter @flow-ledger/frontend build",
+    "bundle:check": "node scripts/check-bundle-size.mjs",
     "e2e": "playwright test"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.62.1",
     "@types/node": "^26.1.2"
   }

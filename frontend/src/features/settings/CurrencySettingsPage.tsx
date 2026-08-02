@@ -53,7 +53,7 @@ export function CurrencySettingsPage() {
     }
   };
 
-  if (currencies.isLoading) return <Box sx={{ minHeight: 360, display: 'grid', placeItems: 'center' }}><CircularProgress /></Box>;
+  if (currencies.isLoading) return <Box sx={{ minHeight: 360, display: 'grid', placeItems: 'center' }}><CircularProgress aria-label="正在加载币种" /></Box>;
 
   return (
     <Stack spacing={2.5} sx={{ maxWidth: 980, mx: 'auto' }}>
@@ -81,7 +81,7 @@ export function CurrencySettingsPage() {
       <Paper variant="outlined" sx={{ overflow: 'hidden', borderRadius: 2.5 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', p: 2.5 }}>
           <Box><Typography sx={{ fontWeight: 700 }}>最新汇率</Typography><Typography sx={{ color: 'text.secondary', fontSize: 12, mt: 0.5 }}>1 单位外币可兑换的 CNY 金额；缺失日期会使用之前最近记录。</Typography></Box>
-          <Button variant="outlined" startIcon={syncMutation.isPending ? <CircularProgress size={16} /> : <RefreshOutlined />} disabled={syncMutation.isPending} onClick={() => syncMutation.mutate()}>立即同步</Button>
+          <Button variant="outlined" startIcon={syncMutation.isPending ? <CircularProgress aria-label="正在同步汇率" size={16} /> : <RefreshOutlined />} disabled={syncMutation.isPending} onClick={() => syncMutation.mutate()}>立即同步</Button>
         </Stack>
         {latestRates.data?.length ? (
           <Table size="small">

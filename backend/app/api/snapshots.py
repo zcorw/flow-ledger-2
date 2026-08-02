@@ -29,21 +29,6 @@ CHANGE_AMOUNT_THRESHOLD = Decimal("20000")
 CHANGE_PERCENT_THRESHOLD = Decimal("0.20")
 
 
-def _previous_snapshot(
-    db: Session, user_id: uuid.UUID, project_id: uuid.UUID, target_date: date
-) -> MonthlySnapshot | None:
-    return db.scalar(
-        select(MonthlySnapshot)
-        .where(
-            MonthlySnapshot.user_id == user_id,
-            MonthlySnapshot.project_id == project_id,
-            MonthlySnapshot.snapshot_date < target_date,
-        )
-        .order_by(MonthlySnapshot.snapshot_date.desc())
-        .limit(1)
-    )
-
-
 def _change_values(
     current: Decimal | None, previous: Decimal | None
 ) -> tuple[Decimal | None, Decimal | None, bool]:
@@ -87,19 +72,50 @@ def _sheet(
         else {}
     )
     saved_ids = set(saved)
-    hierarchy = db.execute(
-        select(Project, Account, Institution)
-        .join(Account, Project.account_id == Account.id)
-        .join(Institution, Account.institution_id == Institution.id)
-        .where(
-            Project.user_id == user_id,
-            or_(Project.is_active.is_(True), Project.id.in_(saved_ids)),
+    hierarchy = list(
+        db.execute(
+            select(Project, Account, Institution)
+            .join(Account, Project.account_id == Account.id)
+            .join(Institution, Account.institution_id == Institution.id)
+            .where(
+                Project.user_id == user_id,
+                or_(Project.is_active.is_(True), Project.id.in_(saved_ids)),
+            )
+            .order_by(Institution.name, Account.name, Project.name)
         )
-        .order_by(Institution.name, Account.name, Project.name)
     )
+    project_ids = [project.id for project, _account, _institution in hierarchy]
+    previous: dict[uuid.UUID, MonthlySnapshot] = {}
+    if project_ids:
+        ranked = (
+            select(
+                MonthlySnapshot.id.label("snapshot_id"),
+                func.row_number()
+                .over(
+                    partition_by=MonthlySnapshot.project_id,
+                    order_by=MonthlySnapshot.snapshot_date.desc(),
+                )
+                .label("position"),
+            )
+            .where(
+                MonthlySnapshot.user_id == user_id,
+                MonthlySnapshot.project_id.in_(project_ids),
+                MonthlySnapshot.snapshot_date < target_date,
+            )
+            .subquery()
+        )
+        previous = {
+            item.project_id: item
+            for item in db.scalars(
+                select(MonthlySnapshot)
+                .join(ranked, MonthlySnapshot.id == ranked.c.snapshot_id)
+                .where(ranked.c.position == 1)
+            )
+        }
     rows: list[SnapshotRowResponse] = []
     missing: list[uuid.UUID] = []
     warnings: list[SnapshotWarning] = []
+    rate_resolutions = {}
     for project, account, institution in hierarchy:
         record = saved.get(project.id)
         seed_record = seed.get(project.id)
@@ -114,13 +130,17 @@ def _sheet(
         rate = record.fx_rate_to_cny if record else None
         stale = record.fx_is_stale if record else False
         if seed_record and not record:
-            resolution = resolve_rate(db, project.currency_code, target_date)
+            resolution = rate_resolutions.get(project.currency_code)
+            if resolution is None:
+                resolution = resolve_rate(db, project.currency_code, target_date)
+                rate_resolutions[project.currency_code] = resolution
             rate = resolution.rate_to_cny
             stale = resolution.is_stale
             converted = (original * rate).quantize(MONEY_QUANTIZER, rounding=ROUND_HALF_UP)
-        previous = _previous_snapshot(db, user_id, project.id, target_date)
+        previous_record = previous.get(project.id)
         change, percent, unusual = _change_values(
-            converted, previous.converted_amount_cny if previous else None
+            converted,
+            previous_record.converted_amount_cny if previous_record else None,
         )
         note = record.change_note if record else seed_record.change_note if seed_record else None
         if unusual:
@@ -207,24 +227,39 @@ def save_bulk(
     if len(project_ids) != len(set(project_ids)):
         raise ApiError(400, "DUPLICATE_PROJECT", "同一批次不能重复提交项目")
     currencies = set(enabled_currency_codes(db, auth.user.id))
-    for row in payload.rows:
-        project = db.scalar(
-            select(Project).where(Project.id == row.project_id, Project.user_id == auth.user.id)
+    projects = {
+        item.id: item
+        for item in db.scalars(
+            select(Project).where(
+                Project.user_id == auth.user.id,
+                Project.id.in_(project_ids),
+            )
         )
-        if project is None:
-            raise ApiError(404, "PROJECT_NOT_FOUND", "项目不存在")
-        existing = db.scalar(
+    }
+    existing_records = {
+        item.project_id: item
+        for item in db.scalars(
             select(MonthlySnapshot).where(
                 MonthlySnapshot.user_id == auth.user.id,
-                MonthlySnapshot.project_id == project.id,
+                MonthlySnapshot.project_id.in_(project_ids),
                 MonthlySnapshot.snapshot_date == payload.snapshot_date,
             )
         )
+    }
+    rate_resolutions = {}
+    for row in payload.rows:
+        project = projects.get(row.project_id)
+        if project is None:
+            raise ApiError(404, "PROJECT_NOT_FOUND", "项目不存在")
+        existing = existing_records.get(project.id)
         if not project.is_active and existing is None:
             raise ApiError(400, "PROJECT_INACTIVE", f"项目 {project.name} 已停用")
         if project.currency_code not in currencies:
             raise ApiError(400, "CURRENCY_NOT_ENABLED", f"{project.currency_code} 未启用")
-        resolution = resolve_rate(db, project.currency_code, payload.snapshot_date)
+        resolution = rate_resolutions.get(project.currency_code)
+        if resolution is None:
+            resolution = resolve_rate(db, project.currency_code, payload.snapshot_date)
+            rate_resolutions[project.currency_code] = resolution
         converted = (row.original_amount * resolution.rate_to_cny).quantize(
             MONEY_QUANTIZER, rounding=ROUND_HALF_UP
         )
@@ -247,7 +282,6 @@ def save_bulk(
         item.change_note = row.change_note.strip() if row.change_note else None
         if existing is None:
             db.add(item)
-        db.flush()
         db.add(
             AuditLog(
                 user_id=auth.user.id,

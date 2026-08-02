@@ -138,7 +138,7 @@ Flow Ledger 是一个面向个人私有使用的资金资产管理 Web 应用。
   Depends on: T009。
   Verify: staging/VPS 部署演练、迁移、健康检查、汇率调度、备份与恢复演练全部成功。
 
-- [ ] T011 [P2] 可用性与性能打磨
+- [x] T011 [P2] 可用性与性能打磨
   Goal: 大量项目和多年快照下仍保持可操作性，并完善键盘、焦点、颜色和可读性体验。
   Notes: 优化 Data Grid、查询缓存与图表重绘；补充无障碍标签、键盘导航和 reduced-motion。
   Likely files/modules: shared UI/theme, data grids, chart components, API query/index tuning。

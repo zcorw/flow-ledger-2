@@ -200,7 +200,7 @@ export function OperationsSettings() {
                     size="small"
                     variant="contained"
                     disabled={busy}
-                    startIcon={busy ? <CircularProgress size={15} /> : <FileUploadOutlined />}
+                    startIcon={busy ? <CircularProgress aria-label="正在处理导入" size={15} /> : <FileUploadOutlined />}
                     onClick={() => commitMutation.mutate({ type: definition.type, jobId: job.id })}
                   >
                     确认导入全部数据
@@ -211,7 +211,7 @@ export function OperationsSettings() {
                     size="small"
                     variant="outlined"
                     disabled={busy}
-                    startIcon={busy ? <CircularProgress size={15} /> : <FileUploadOutlined />}
+                    startIcon={busy ? <CircularProgress aria-label="正在处理导入" size={15} /> : <FileUploadOutlined />}
                   >
                     选择文件并校验
                     <input
@@ -246,7 +246,7 @@ export function OperationsSettings() {
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
             <Button
               variant="outlined"
-              startIcon={exportMutation.isPending ? <CircularProgress size={16} /> : <BackupOutlined />}
+              startIcon={exportMutation.isPending ? <CircularProgress aria-label="正在导出备份" size={16} /> : <BackupOutlined />}
               disabled={exportMutation.isPending}
               onClick={() => exportMutation.mutate()}
             >
@@ -256,7 +256,7 @@ export function OperationsSettings() {
               component="label"
               color="error"
               variant="outlined"
-              startIcon={uploadMutation.isPending ? <CircularProgress size={16} /> : <RestoreOutlined />}
+              startIcon={uploadMutation.isPending ? <CircularProgress aria-label="正在校验备份" size={16} /> : <RestoreOutlined />}
               disabled={uploadMutation.isPending}
             >
               选择备份并恢复
@@ -317,7 +317,7 @@ export function OperationsSettings() {
           <Button
             color="error"
             variant="contained"
-            startIcon={restoreMutation.isPending ? <CircularProgress size={16} /> : <RestoreOutlined />}
+            startIcon={restoreMutation.isPending ? <CircularProgress aria-label="正在恢复备份" size={16} /> : <RestoreOutlined />}
             disabled={!canRestore(backup, password, confirmed, restoreMutation.isPending)}
             onClick={() => restoreMutation.mutate()}
           >

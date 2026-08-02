@@ -3,11 +3,11 @@ from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from app.models.asset import Account, MonthlySnapshot, Project
-from app.models.debt import DebtItem
+from app.models.debt import DebtEvent, DebtItem
 from app.models.institution import Institution
 from app.schemas.dashboard import (
     ChartPoint,
@@ -16,7 +16,6 @@ from app.schemas.dashboard import (
     ProjectChangePoint,
     TrendPoint,
 )
-from app.services.debt import debt_balance_at
 from app.services.fx import resolve_rate
 
 
@@ -27,11 +26,38 @@ def _debt_values(
     payable = Decimal("0")
     receivable_currencies: dict[str, Decimal] = defaultdict(Decimal)
     warnings: list[str] = []
-    for item in db.scalars(select(DebtItem).where(DebtItem.user_id == user_id)):
-        balance, _ = debt_balance_at(db, item.id, target_date)
+    balance_expression = func.coalesce(
+        func.sum(
+            case(
+                (
+                    DebtEvent.event_type.in_(["issue", "adjustment"]),
+                    DebtEvent.amount,
+                ),
+                else_=-DebtEvent.amount,
+            )
+        ),
+        Decimal("0"),
+    )
+    rows = db.execute(
+        select(DebtItem, balance_expression)
+        .outerjoin(
+            DebtEvent,
+            and_(
+                DebtEvent.debt_item_id == DebtItem.id,
+                DebtEvent.event_date <= target_date,
+            ),
+        )
+        .where(DebtItem.user_id == user_id)
+        .group_by(DebtItem.id)
+    )
+    rates = {}
+    for item, balance in rows:
         if balance <= 0:
             continue
-        rate = resolve_rate(db, item.currency_code, target_date)
+        rate = rates.get(item.currency_code)
+        if rate is None:
+            rate = resolve_rate(db, item.currency_code, target_date)
+            rates[item.currency_code] = rate
         converted = balance * rate.rate_to_cny
         if rate.is_stale:
             warnings.append(f"{item.currency_code} 借贷余额使用历史汇率")
@@ -96,6 +122,18 @@ def _points(values: dict[str, Decimal]) -> list[ChartPoint]:
     ]
 
 
+def _net_worth_value(db: Session, user_id: uuid.UUID, target_date: date) -> Decimal:
+    project_assets = db.scalar(
+        select(func.coalesce(func.sum(MonthlySnapshot.converted_amount_cny), Decimal("0"))).where(
+            MonthlySnapshot.user_id == user_id,
+            MonthlySnapshot.snapshot_date == target_date,
+            MonthlySnapshot.converted_amount_cny > 0,
+        )
+    )
+    receivable, payable, _, _ = _debt_values(db, user_id, target_date)
+    return project_assets + receivable - payable
+
+
 def dashboard_charts(db: Session, user_id: uuid.UUID, target_date: date) -> DashboardCharts:
     rows = list(
         db.execute(
@@ -141,8 +179,7 @@ def dashboard_charts(db: Session, user_id: uuid.UUID, target_date: date) -> Dash
         )
     )
     trend = [
-        TrendPoint(date=item, value=dashboard_summary(db, user_id, item).net_worth_cny)
-        for item in reversed(dates)
+        TrendPoint(date=item, value=_net_worth_value(db, user_id, item)) for item in reversed(dates)
     ]
     previous_date = db.scalar(
         select(func.max(MonthlySnapshot.snapshot_date)).where(

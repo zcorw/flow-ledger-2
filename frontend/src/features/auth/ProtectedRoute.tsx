@@ -6,7 +6,7 @@ import { getMe } from './api';
 
 export function ProtectedRoute() {
   const auth = useQuery({ queryKey: ['auth', 'me'], queryFn: getMe, retry: false });
-  if (auth.isLoading) return <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}><CircularProgress /></Box>;
+  if (auth.isLoading) return <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}><CircularProgress aria-label="正在验证登录状态" /></Box>;
   if (auth.error instanceof ApiClientError && auth.error.status === 401) return <Navigate to="/login" replace />;
   if (!auth.data) return <Navigate to="/login" replace />;
   return <Outlet />;

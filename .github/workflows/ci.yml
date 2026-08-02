@@ -22,6 +22,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm bundle:check
 
   backend:
     runs-on: ubuntu-latest

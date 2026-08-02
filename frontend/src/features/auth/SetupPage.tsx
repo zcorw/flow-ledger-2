@@ -29,7 +29,7 @@ export function SetupPage() {
     },
   });
 
-  if (setupStatus.isLoading) return <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}><CircularProgress /></Box>;
+  if (setupStatus.isLoading) return <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}><CircularProgress aria-label="正在检查初始化状态" /></Box>;
   if (setupStatus.data && !setupStatus.data.requires_setup) return <Navigate to="/login" replace />;
   const errorMessage = mutation.error instanceof ApiClientError ? mutation.error.message : undefined;
 
@@ -62,9 +62,9 @@ export function SetupPage() {
             {...form.register('password')}
             slotProps={{ input: { startAdornment: <InputAdornment position="start"><LockOutlined fontSize="small" /></InputAdornment> } }}
           />
-          <LinearProgress variant="determinate" value={password.length >= 12 ? 75 : password.length * 5} sx={{ borderRadius: 2 }} />
+          <LinearProgress aria-label="密码强度" variant="determinate" value={password.length >= 12 ? 75 : password.length * 5} sx={{ borderRadius: 2 }} />
           <Button type="submit" variant="contained" size="large" disabled={mutation.isPending} sx={{ minHeight: 46 }}>
-            {mutation.isPending ? <CircularProgress size={22} color="inherit" /> : '创建管理员并初始化'}
+            {mutation.isPending ? <CircularProgress aria-label="正在创建管理员" size={22} color="inherit" /> : '创建管理员并初始化'}
           </Button>
         </Stack>
       </Box>

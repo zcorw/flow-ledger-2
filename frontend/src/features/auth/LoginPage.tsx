@@ -57,7 +57,7 @@ export function LoginPage() {
             slotProps={{ input: { startAdornment: <InputAdornment position="start"><LockOutlined fontSize="small" /></InputAdornment> } }}
           />
           <Button type="submit" variant="contained" size="large" disabled={mutation.isPending} sx={{ minHeight: 46 }}>
-            {mutation.isPending ? <CircularProgress size={22} color="inherit" /> : '登录'}
+            {mutation.isPending ? <CircularProgress aria-label="正在登录" size={22} color="inherit" /> : '登录'}
           </Button>
         </Stack>
       </Box>
