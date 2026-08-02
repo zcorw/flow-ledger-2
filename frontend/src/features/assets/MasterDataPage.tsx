@@ -1,13 +1,15 @@
 import AccountBalanceOutlined from '@mui/icons-material/AccountBalanceOutlined';
 import AddOutlined from '@mui/icons-material/AddOutlined';
 import BlockOutlined from '@mui/icons-material/BlockOutlined';
+import CheckOutlined from '@mui/icons-material/CheckOutlined';
 import EditOutlined from '@mui/icons-material/EditOutlined';
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined';
 import WalletOutlined from '@mui/icons-material/WalletOutlined';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControlLabel, IconButton, List, ListItem, ListItemButton, MenuItem, Paper, Snackbar,
-  Stack, Switch, TextField, Typography,
+  FormControl, FormControlLabel, FormHelperText, FormLabel, IconButton, List,
+  ListItem, ListItemButton, MenuItem, Paper, Snackbar, Stack, Switch, TextField,
+  Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -29,6 +31,75 @@ const accountTypes = [['savings', '储蓄账户'], ['wealth_management', '理财
 const assetTypes = [['bank_deposit', '银行存款'], ['cash', '现金'], ['securities', '证券']];
 const liquidityLevels = [['t0', '随时可用'], ['within_7d', '7 天内'], ['within_30d', '30 天内'], ['within_90d', '90 天内'], ['locked_or_unknown', '锁定或未知']];
 const riskLevels = [['low', '低风险'], ['medium', '中风险'], ['high', '高风险']];
+const displayColors = ['#2f7d6d', '#397c93', '#66558c', '#9b6a22', '#a44740', '#40514d'];
+
+function normalizeDisplayColor(value: string | null | undefined, fallback: string) {
+  return value && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : fallback;
+}
+
+function ColorPickerField({ value, onChange }: { value: string; onChange: (color: string) => void }) {
+  const selectedColor = normalizeDisplayColor(value, displayColors[0]);
+
+  return (
+    <FormControl fullWidth>
+      <FormLabel sx={{ mb: 1, color: 'text.primary', fontSize: 13 }}>显示颜色</FormLabel>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+        {displayColors.map((color) => {
+          const selected = selectedColor === color;
+          return (
+            <Box
+              key={color}
+              component="button"
+              type="button"
+              aria-label={`选择颜色 ${color.toUpperCase()}`}
+              aria-pressed={selected}
+              onClick={() => onChange(color)}
+              sx={{
+                width: 38,
+                height: 38,
+                p: 0,
+                display: 'grid',
+                placeItems: 'center',
+                borderRadius: '50%',
+                border: selected ? '3px solid' : '1px solid',
+                borderColor: selected ? 'primary.dark' : 'divider',
+                bgcolor: color,
+                color: 'white',
+                cursor: 'pointer',
+                boxShadow: selected ? '0 0 0 2px white inset' : 'none',
+                '&:focus-visible': { outline: '3px solid #397c93', outlineOffset: 2 },
+              }}
+            >
+              {selected && <CheckOutlined fontSize="small" />}
+            </Box>
+          );
+        })}
+        <Box
+          component="input"
+          type="color"
+          aria-label="选择自定义显示颜色"
+          title="选择自定义显示颜色"
+          value={selectedColor}
+          onChange={(event) => onChange(event.target.value)}
+          sx={{
+            width: 44,
+            height: 40,
+            p: '3px',
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1.5,
+            bgcolor: 'background.paper',
+            cursor: 'pointer',
+            '&::-webkit-color-swatch-wrapper': { p: 0 },
+            '&::-webkit-color-swatch': { border: 0, borderRadius: 1 },
+          }}
+        />
+        <Chip size="small" label={selectedColor.toUpperCase()} sx={{ fontFamily: 'monospace' }} />
+      </Stack>
+      <FormHelperText sx={{ ml: 0 }}>选择预设颜色，或点击最后的色块打开自定义颜色选择器。</FormHelperText>
+    </FormControl>
+  );
+}
 
 function PanelHeader({ title, subtitle, onAdd, disabled = false }: { title: string; subtitle: string; onAdd: () => void; disabled?: boolean }) {
   return <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', p: 2, borderBottom: '1px solid', borderColor: 'divider' }}><Box><Typography sx={{ fontWeight: 750 }}>{title}</Typography><Typography color="text.secondary" sx={{ fontSize: 11 }}>{subtitle}</Typography></Box><Button size="small" startIcon={<AddOutlined />} onClick={onAdd} disabled={disabled}>新增</Button></Stack>;
@@ -81,8 +152,8 @@ export function MasterDataPage() {
   });
   const deactivateMutation = useMutation({ mutationFn: deactivateProject, onSuccess: async () => { await invalidate(); setNotice('项目已停用，历史数据仍会保留'); } });
 
-  const openInstitution = (item?: Institution) => setEditor({ kind: 'institution', id: item?.id, values: { name: item?.name ?? '', type: item?.institution_type ?? 'bank', color: item?.display_color ?? '#2f7d6d', active: item?.is_active ?? true } });
-  const openAccount = (item?: Account) => setEditor({ kind: 'account', id: item?.id, values: { parent: item?.institution_id ?? institutionId, name: item?.name ?? '', type: item?.account_type ?? (institutions.find((entry) => entry.id === institutionId)?.institution_type === 'cash' ? 'cash_wallet' : 'savings'), identifier: item?.masked_identifier ?? '', color: item?.display_color ?? '#5b7c75', active: item?.is_active ?? true } });
+  const openInstitution = (item?: Institution) => setEditor({ kind: 'institution', id: item?.id, values: { name: item?.name ?? '', type: item?.institution_type ?? 'bank', color: normalizeDisplayColor(item?.display_color, '#2f7d6d'), active: item?.is_active ?? true } });
+  const openAccount = (item?: Account) => setEditor({ kind: 'account', id: item?.id, values: { parent: item?.institution_id ?? institutionId, name: item?.name ?? '', type: item?.account_type ?? (institutions.find((entry) => entry.id === institutionId)?.institution_type === 'cash' ? 'cash_wallet' : 'savings'), identifier: item?.masked_identifier ?? '', color: normalizeDisplayColor(item?.display_color, '#40514d'), active: item?.is_active ?? true } });
   const openProject = (item?: Project) => setEditor({ kind: 'project', id: item?.id, values: { parent: item?.account_id ?? accountId, name: item?.name ?? '', type: item?.asset_type ?? 'bank_deposit', currency: item?.currency_code ?? 'CNY', liquidity: item?.default_liquidity_level ?? 't0', risk: item?.default_risk_level ?? 'low', notes: item?.notes ?? '', active: item?.is_active ?? true } });
   const setValue = (key: string, value: string | boolean) => setEditor((current) => current ? { ...current, values: { ...current.values, [key]: value } } : current);
   const error = saveMutation.error ?? institutionsQuery.error ?? accountsQuery.error ?? projectsQuery.error;
@@ -101,8 +172,8 @@ export function MasterDataPage() {
       <DialogTitle>{editor?.id ? '编辑' : '新增'}{editor?.kind === 'institution' ? '机构' : editor?.kind === 'account' ? '账户' : '项目'}</DialogTitle>
       <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
         <TextField label="名称" value={String(editor?.values.name ?? '')} onChange={(event) => setValue('name', event.target.value)} required autoFocus />
-        {editor?.kind === 'institution' && <><TextField select label="机构类型" value={String(editor.values.type)} onChange={(event) => setValue('type', event.target.value)}>{institutionTypes.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</TextField><TextField label="显示颜色" value={String(editor.values.color)} onChange={(event) => setValue('color', event.target.value)} /></>}
-        {editor?.kind === 'account' && <><TextField select label="账户类型" value={String(editor.values.type)} onChange={(event) => setValue('type', event.target.value)}>{accountTypes.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</TextField><TextField label="脱敏标识" helperText="仅填写尾号（如：尾号 8888）或自定义简称" value={String(editor.values.identifier)} onChange={(event) => setValue('identifier', event.target.value)} /><TextField label="显示颜色" value={String(editor.values.color)} onChange={(event) => setValue('color', event.target.value)} /></>}
+        {editor?.kind === 'institution' && <><TextField select label="机构类型" value={String(editor.values.type)} onChange={(event) => setValue('type', event.target.value)}>{institutionTypes.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</TextField><ColorPickerField value={String(editor.values.color)} onChange={(color) => setValue('color', color)} /></>}
+        {editor?.kind === 'account' && <><TextField select label="账户类型" value={String(editor.values.type)} onChange={(event) => setValue('type', event.target.value)}>{accountTypes.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</TextField><TextField label="脱敏标识" helperText="仅填写尾号（如：尾号 8888）或自定义简称" value={String(editor.values.identifier)} onChange={(event) => setValue('identifier', event.target.value)} /><ColorPickerField value={String(editor.values.color)} onChange={(color) => setValue('color', color)} /></>}
         {editor?.kind === 'project' && <><TextField select label="资产类型" value={String(editor.values.type)} onChange={(event) => setValue('type', event.target.value)}>{assetTypes.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</TextField><TextField select label="币种" value={String(editor.values.currency)} onChange={(event) => setValue('currency', event.target.value)}>{currencies.map((item) => <MenuItem key={item.code} value={item.code}>{item.code} · {item.name}</MenuItem>)}</TextField><TextField select label="默认流动性" value={String(editor.values.liquidity)} onChange={(event) => setValue('liquidity', event.target.value)}>{liquidityLevels.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</TextField><TextField select label="默认风险" value={String(editor.values.risk)} onChange={(event) => setValue('risk', event.target.value)}>{riskLevels.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</TextField><TextField label="备注" multiline minRows={2} value={String(editor.values.notes)} onChange={(event) => setValue('notes', event.target.value)} /></>}
         <FormControlLabel control={<Switch checked={Boolean(editor?.values.active)} onChange={(event) => setValue('active', event.target.checked)} />} label="启用" />
       </Stack></DialogContent>

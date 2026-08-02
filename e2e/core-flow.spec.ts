@@ -46,14 +46,25 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   ).toBeVisible();
   const addButtons = page.getByRole('button', { name: '新增' });
   await addButtons.nth(0).click();
-  await page.getByRole('dialog').getByLabel('名称').fill('E2E Bank');
-  await page.getByRole('dialog').getByRole('button', { name: '保存' }).click();
+  const institutionDialog = page.getByRole('dialog');
+  await institutionDialog.getByLabel('名称').fill('E2E Bank');
+  await expect(institutionDialog.getByLabel('选择自定义显示颜色')).toHaveAttribute('type', 'color');
+  await institutionDialog.getByRole('button', { name: '选择颜色 #397C93' }).click();
+  await expect(institutionDialog.getByRole('button', { name: '选择颜色 #397C93' })).toHaveAttribute('aria-pressed', 'true');
+  const institutionRequestPromise = page.waitForRequest(
+    (request) => request.url().endsWith('/api/v1/institutions') && request.method() === 'POST',
+  );
+  await institutionDialog.getByRole('button', { name: '保存' }).click();
+  const institutionRequest = await institutionRequestPromise;
+  expect(institutionRequest.postDataJSON().displayColor).toBe('#397c93');
   await expect(page.getByText('E2E Bank', { exact: true })).toBeVisible();
   await page.getByText('E2E Bank', { exact: true }).click();
 
   await addButtons.nth(1).click();
   await page.getByRole('dialog').getByLabel('名称').fill('E2E Account');
   await page.getByRole('dialog').getByLabel('脱敏标识').fill('尾号 2468');
+  await page.getByRole('dialog').getByLabel('选择自定义显示颜色').fill('#66558c');
+  await expect(page.getByRole('dialog').getByLabel('选择自定义显示颜色')).toHaveValue('#66558c');
   await page.getByRole('dialog').getByRole('button', { name: '保存' }).click();
   await expect(page.getByText('E2E Account', { exact: true })).toBeVisible();
   await page.getByText('E2E Account', { exact: true }).click();
