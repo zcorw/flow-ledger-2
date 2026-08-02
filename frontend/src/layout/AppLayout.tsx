@@ -7,6 +7,7 @@ import SwapHorizOutlined from '@mui/icons-material/SwapHorizOutlined';
 import WalletOutlined from '@mui/icons-material/WalletOutlined';
 import { AppBar, Avatar, Box, Button, Divider, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Stack, Toolbar, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { getMe, logout } from '../features/auth/api';
 
@@ -25,6 +26,9 @@ export function AppLayout() {
   const queryClient = useQueryClient();
   const { data: user } = useQuery({ queryKey: ['auth', 'me'], queryFn: getMe, retry: false });
   const logoutMutation = useMutation({ mutationFn: logout, onSuccess: async () => { queryClient.removeQueries({ queryKey: ['auth'] }); await navigate('/login', { replace: true }); } });
+  useEffect(() => {
+    if (user) queryClient.setQueryData(['setup-status'], { requires_setup: false });
+  }, [queryClient, user]);
   if (!user) return null;
   const activeItem = navItems.find((item) => item.path === location.pathname) ?? navItems[0];
 

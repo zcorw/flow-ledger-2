@@ -25,7 +25,6 @@ export function SetupPage() {
     mutationFn: bootstrap,
     onSuccess: async (user) => {
       queryClient.setQueryData(['auth', 'me'], user);
-      queryClient.setQueryData(['setup-status'], { requires_setup: false });
       await navigate('/', { replace: true });
     },
   });

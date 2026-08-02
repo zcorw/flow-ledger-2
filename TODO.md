@@ -124,7 +124,7 @@ Flow Ledger 是一个面向个人私有使用的资金资产管理 Web 应用。
   Depends on: T004, T005, T006。
   Verify: 正常导入、字段错误、冲突回滚、错误报告、错误密码、预备份与恢复一致性测试通过。
 
-- [ ] T009 [P1] 完成端到端质量与安全校验
+- [x] T009 [P1] 完成端到端质量与安全校验
   Goal: 关键业务链路有自动化覆盖，金额计算、权限、日志和破坏性操作满足文档约束。
   Notes: 增加前后端单元/集成测试和核心 E2E；检查敏感字段、cookie、审计和导出权限。
   Likely files/modules: frontend/backend test suites, E2E config, CI workflow。

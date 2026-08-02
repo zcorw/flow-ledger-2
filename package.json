@@ -8,6 +8,11 @@
     "lint": "pnpm --filter @flow-ledger/frontend lint",
     "typecheck": "pnpm --filter @flow-ledger/frontend typecheck",
     "test": "pnpm --filter @flow-ledger/frontend test",
-    "build": "pnpm --filter @flow-ledger/frontend build"
+    "build": "pnpm --filter @flow-ledger/frontend build",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.1.2"
   }
 }
