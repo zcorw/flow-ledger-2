@@ -17,6 +17,7 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   context,
   page,
 }) => {
+  test.setTimeout(90_000);
   await page.goto('/setup');
   await expect(page.getByRole('heading', { name: '初始化管理员' })).toBeVisible();
   await expectNoSeriousAccessibilityIssues(page, 'setup');
@@ -125,6 +126,28 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await expectNoSeriousAccessibilityIssues(page, 'mobile-dashboard');
 
   await page.setViewportSize({ width: 1280, height: 720 });
+  await page.getByRole('button', { name: '机构与账户' }).click();
+  await page.getByRole('button', { name: '编辑机构 E2E Bank' }).click();
+  const editInstitutionDialog = page.getByRole('dialog');
+  await editInstitutionDialog.getByRole('switch', { name: '启用' }).uncheck();
+  const deactivateInstitutionResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/v1/institutions/') && response.request().method() === 'PUT',
+  );
+  await editInstitutionDialog.getByRole('button', { name: '保存' }).click();
+  expect((await deactivateInstitutionResponse).status()).toBe(200);
+  await expect(page.getByText('停用', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: '月度快照' }).click();
+  const filteredSnapshotResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/v1/snapshots?date=2026-07-31') &&
+      response.request().method() === 'GET',
+  );
+  await page.getByLabel('快照日期').fill('2026-07-31');
+  expect((await filteredSnapshotResponse).status()).toBe(200);
+  await expect(page.getByRole('row').filter({ hasText: 'E2E Balance' })).toHaveCount(0);
+
   await page.getByRole('button', { name: '设置' }).click();
   await expect(page.getByRole('heading', { level: 1, name: '设置' })).toBeVisible();
 

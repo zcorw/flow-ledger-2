@@ -295,6 +295,9 @@ def _find_project(db: Session, user_id: uuid.UUID, row: dict[str, str]) -> Proje
             Institution.name == row["institution_name"],
             Account.name == row["account_name"],
             Project.name == row["project_name"],
+            Institution.is_active.is_(True),
+            Account.is_active.is_(True),
+            Project.is_active.is_(True),
         )
     )
 
@@ -329,7 +332,7 @@ def _validate_snapshots(
             _error(errors, index, "risk_level", "风险等级无效")
         project = _find_project(db, user_id, row)
         if project is None:
-            _error(errors, index, "project_name", "引用的项目不存在")
+            _error(errors, index, "project_name", "引用的项目不存在或所属层级已停用")
             continue
         if snapshot_date is None:
             continue

@@ -79,6 +79,8 @@ def _sheet(
             .join(Institution, Account.institution_id == Institution.id)
             .where(
                 Project.user_id == user_id,
+                Account.is_active.is_(True),
+                Institution.is_active.is_(True),
                 or_(Project.is_active.is_(True), Project.id.in_(saved_ids)),
             )
             .order_by(Institution.name, Account.name, Project.name)
@@ -227,10 +229,13 @@ def save_bulk(
     if len(project_ids) != len(set(project_ids)):
         raise ApiError(400, "DUPLICATE_PROJECT", "同一批次不能重复提交项目")
     currencies = set(enabled_currency_codes(db, auth.user.id))
-    projects = {
-        item.id: item
-        for item in db.scalars(
-            select(Project).where(
+    hierarchy = {
+        project.id: (project, account, institution)
+        for project, account, institution in db.execute(
+            select(Project, Account, Institution)
+            .join(Account, Project.account_id == Account.id)
+            .join(Institution, Account.institution_id == Institution.id)
+            .where(
                 Project.user_id == auth.user.id,
                 Project.id.in_(project_ids),
             )
@@ -248,10 +253,15 @@ def save_bulk(
     }
     rate_resolutions = {}
     for row in payload.rows:
-        project = projects.get(row.project_id)
-        if project is None:
+        entities = hierarchy.get(row.project_id)
+        if entities is None:
             raise ApiError(404, "PROJECT_NOT_FOUND", "项目不存在")
+        project, account, institution = entities
         existing = existing_records.get(project.id)
+        if not institution.is_active:
+            raise ApiError(400, "INSTITUTION_INACTIVE", f"机构 {institution.name} 已停用")
+        if not account.is_active:
+            raise ApiError(400, "ACCOUNT_INACTIVE", f"账户 {account.name} 已停用")
         if not project.is_active and existing is None:
             raise ApiError(400, "PROJECT_INACTIVE", f"项目 {project.name} 已停用")
         if project.currency_code not in currencies:

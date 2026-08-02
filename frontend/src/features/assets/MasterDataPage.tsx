@@ -128,6 +128,7 @@ export function MasterDataPage() {
       queryClient.invalidateQueries({ queryKey: ['institutions'] }),
       queryClient.invalidateQueries({ queryKey: ['accounts'] }),
       queryClient.invalidateQueries({ queryKey: ['projects'] }),
+      queryClient.invalidateQueries({ queryKey: ['snapshots'] }),
     ]);
   };
 

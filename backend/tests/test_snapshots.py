@@ -9,7 +9,7 @@ from app.models.audit import AuditLog
 from app.models.fx import FxRate
 
 
-def bootstrap_hierarchy(client: TestClient) -> tuple[str, str, str]:
+def bootstrap_hierarchy(client: TestClient) -> tuple[str, str, str, str]:
     assert (
         client.post(
             "/api/v1/setup/bootstrap",
@@ -49,11 +49,16 @@ def bootstrap_hierarchy(client: TestClient) -> tuple[str, str, str]:
             },
         ).json()["id"]
 
-    return project("CNY Balance", "CNY"), project("USD Balance", "USD"), account["id"]
+    return (
+        project("CNY Balance", "CNY"),
+        project("USD Balance", "USD"),
+        account["id"],
+        institution["id"],
+    )
 
 
 def test_snapshot_batch_rates_copy_changes_and_audit(client: TestClient) -> None:
-    cny_id, usd_id, _ = bootstrap_hierarchy(client)
+    cny_id, usd_id, _, _ = bootstrap_hierarchy(client)
     with get_session_factory()() as db:
         db.add(
             FxRate(
@@ -128,7 +133,7 @@ def test_snapshot_batch_rates_copy_changes_and_audit(client: TestClient) -> None
 
 
 def test_snapshot_missing_rate_and_inactive_history(client: TestClient) -> None:
-    cny_id, _, account_id = bootstrap_hierarchy(client)
+    cny_id, _, account_id, _ = bootstrap_hierarchy(client)
     jpy = client.post(
         "/api/v1/projects",
         json={
@@ -174,3 +179,90 @@ def test_snapshot_missing_rate_and_inactive_history(client: TestClient) -> None:
     assert any(item["project_id"] == cny_id for item in historical["rows"])
     current = client.get("/api/v1/snapshots", params={"date": "2026-09-30"}).json()
     assert all(item["project_id"] != cny_id for item in current["rows"])
+
+
+def test_inactive_parent_hides_descendants_and_rejects_snapshot_writes(
+    client: TestClient,
+) -> None:
+    cny_id, usd_id, account_id, institution_id = bootstrap_hierarchy(client)
+    row = {
+        "projectId": cny_id,
+        "originalAmount": "500",
+        "liquidityLevel": "t0",
+        "riskLevel": "low",
+    }
+    assert (
+        client.put(
+            "/api/v1/snapshots/bulk",
+            json={"snapshotDate": "2026-07-31", "rows": [row]},
+        ).status_code
+        == 200
+    )
+
+    institution_payload = {
+        "name": "Test Bank",
+        "institutionType": "bank",
+        "isActive": False,
+    }
+    deactivated = client.put(
+        f"/api/v1/institutions/{institution_id}", json=institution_payload
+    )
+    assert deactivated.status_code == 200
+
+    historical = client.get("/api/v1/snapshots", params={"date": "2026-07-31"}).json()
+    current = client.get("/api/v1/snapshots", params={"date": "2026-09-30"}).json()
+    assert {cny_id, usd_id}.isdisjoint(item["project_id"] for item in historical["rows"])
+    assert {cny_id, usd_id}.isdisjoint(item["project_id"] for item in current["rows"])
+
+    rejected = client.put(
+        "/api/v1/snapshots/bulk",
+        json={"snapshotDate": "2026-07-31", "rows": [row]},
+    )
+    assert rejected.status_code == 400
+    assert rejected.json()["error"]["code"] == "INSTITUTION_INACTIVE"
+
+    import_content = "\n".join(
+        [
+            "snapshot_date,institution_name,account_name,project_name,original_amount,"
+            "liquidity_level,risk_level,change_note",
+            "2026-08-31,Test Bank,Assets,CNY Balance,600,t0,low,",
+        ]
+    )
+    import_job = client.post(
+        "/api/v1/imports/monthly_snapshot/validate",
+        files={"file": ("snapshot.csv", import_content.encode(), "text/csv")},
+    ).json()
+    assert import_job["status"] == "invalid"
+    assert any(error["field"] == "project_name" for error in import_job["error_report"])
+
+    institution_payload["isActive"] = True
+    assert (
+        client.put(
+            f"/api/v1/institutions/{institution_id}", json=institution_payload
+        ).status_code
+        == 200
+    )
+    restored = client.get("/api/v1/snapshots", params={"date": "2026-07-31"}).json()
+    assert any(item["project_id"] == cny_id for item in restored["rows"])
+
+    account_payload = {
+        "institutionId": institution_id,
+        "name": "Assets",
+        "accountType": "savings",
+        "maskedIdentifier": "Tail 1234",
+        "isActive": False,
+    }
+    assert (
+        client.put(f"/api/v1/accounts/{account_id}", json=account_payload).status_code
+        == 200
+    )
+    hidden_by_account = client.get(
+        "/api/v1/snapshots", params={"date": "2026-07-31"}
+    ).json()
+    assert hidden_by_account["rows"] == []
+    rejected = client.put(
+        "/api/v1/snapshots/bulk",
+        json={"snapshotDate": "2026-07-31", "rows": [row]},
+    )
+    assert rejected.status_code == 400
+    assert rejected.json()["error"]["code"] == "ACCOUNT_INACTIVE"
