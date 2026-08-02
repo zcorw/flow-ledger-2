@@ -6,6 +6,7 @@ from app.api.currencies import router as currencies_router
 from app.api.dashboard import router as dashboard_router
 from app.api.debts import router as debts_router
 from app.api.fx import router as fx_router
+from app.api.operations import router as operations_router
 from app.api.setup import router as setup_router
 from app.api.snapshots import router as snapshots_router
 from app.api.system import router as system_router
@@ -18,5 +19,6 @@ api_router.include_router(currencies_router, prefix="/currencies", tags=["curren
 api_router.include_router(debts_router, prefix="/debts", tags=["debts"])
 api_router.include_router(dashboard_router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(fx_router, prefix="/fx-rates", tags=["fx-rates"])
+api_router.include_router(operations_router, tags=["operations"])
 api_router.include_router(snapshots_router, prefix="/snapshots", tags=["snapshots"])
 api_router.include_router(system_router, prefix="/system", tags=["system"])

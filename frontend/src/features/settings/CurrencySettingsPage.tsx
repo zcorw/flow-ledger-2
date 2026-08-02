@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { ApiClientError } from '../../api/client';
 import { getCurrencies, getFxSyncRuns, getLatestRates, syncFxRates, updateCurrencies } from './api';
 import { toggleCurrency } from './currencyState';
+import { OperationsSettings } from './OperationsSettings';
 
 const currencyColors: Record<string, { bg: string; fg: string }> = {
   CNY: { bg: '#e7f4f0', fg: '#176c5a' },
@@ -92,6 +93,7 @@ export function CurrencySettingsPage() {
         )}
         {latestRun && <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', m: 2, p: 1.5, borderRadius: 1.5, bgcolor: latestRun.status === 'success' ? 'primary.light' : 'error.light' }}><CheckCircleOutlined color={latestRun.status === 'success' ? 'success' : 'error'} fontSize="small" /><Box sx={{ flex: 1 }}><Typography sx={{ fontSize: 12, fontWeight: 650 }}>最近同步{latestRun.status === 'success' ? '成功' : '失败'}</Typography><Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{new Date(latestRun.started_at).toLocaleString('zh-CN')} · {latestRun.message}</Typography></Box></Stack>}
       </Paper>
+      <OperationsSettings />
       <Snackbar open={Boolean(notice)} autoHideDuration={3500} onClose={() => setNotice(undefined)} message={notice} />
     </Stack>
   );

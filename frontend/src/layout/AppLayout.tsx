@@ -36,7 +36,7 @@ export function AppLayout() {
         <List sx={{ flex: 1 }}>{navItems.map((item) => <ListItemButton key={item.path} selected={activeItem.path === item.path} onClick={() => navigate(item.path)} sx={{ mb: 0.5, borderRadius: 1.5, color: '#9eaaa6', '&.Mui-selected': { color: 'white', bgcolor: 'rgba(39,148,124,.18)' }, '&.Mui-selected:hover': { bgcolor: 'rgba(39,148,124,.25)' } }}><ListItemIcon sx={{ minWidth: 38, color: 'inherit' }}>{item.icon}</ListItemIcon><ListItemText primary={item.label} slotProps={{ primary: { sx: { fontSize: 13 } } }} /></ListItemButton>)}</List>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', p: 1 }}><Avatar sx={{ width: 34, height: 34, bgcolor: '#d9ece7', color: 'primary.dark', fontSize: 12 }}>{user.display_name.slice(0, 1)}</Avatar><Box sx={{ minWidth: 0, flex: 1 }}><Typography noWrap sx={{ fontSize: 12, fontWeight: 650 }}>{user.display_name}</Typography><Typography noWrap sx={{ color: '#74847f', fontSize: 10 }}>私有管理员</Typography></Box><Button aria-label="退出登录" onClick={() => logoutMutation.mutate()} sx={{ minWidth: 32, color: '#9eaaa6' }}><LogoutOutlined fontSize="small" /></Button></Stack>
       </Drawer>
-      <Box sx={{ flex: 1, minWidth: 0, ml: { md: `${drawerWidth}px` } }}>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
         <AppBar position="sticky" elevation={0} color="transparent" sx={{ borderBottom: '1px solid', borderColor: 'divider', backdropFilter: 'blur(12px)', bgcolor: 'rgba(243,245,243,.9)' }}><Toolbar sx={{ px: { xs: 2, md: 4 } }}><Typography component="h1" sx={{ fontSize: 21, fontWeight: 700 }}>{activeItem.label}</Typography></Toolbar></AppBar>
         <Box component="main" sx={{ p: { xs: 2, md: 4 } }}><Outlet /></Box>
       </Box>

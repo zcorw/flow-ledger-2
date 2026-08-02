@@ -117,7 +117,7 @@ Flow Ledger 是一个面向个人私有使用的资金资产管理 Web 应用。
   Depends on: T005, T006。
   Verify: 使用固定数据集校验所有口径和图表汇总，并做空态与 stale 警告检查。
 
-- [ ] T008 [P1] 实现导入、导出、备份与恢复
+- [x] T008 [P1] 实现导入、导出、备份与恢复
   Goal: 三类模板可下载、全量校验和提交，完整备份可安全导出和恢复。
   Notes: 冲突整批拒绝并返回行号/字段/原因；恢复前重认证、自动预备份并全量替换；写审计日志。
   Likely files/modules: import jobs, backup exports, validators, APIs and settings UI。
