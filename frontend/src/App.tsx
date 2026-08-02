@@ -5,6 +5,7 @@ import { SetupPage } from './features/auth/SetupPage';
 import { MasterDataPage } from './features/assets/MasterDataPage';
 import { CurrencySettingsPage } from './features/settings/CurrencySettingsPage';
 import { SnapshotPage } from './features/snapshots/SnapshotPage';
+import { DebtPage } from './features/debts/DebtPage';
 import { AppLayout } from './layout/AppLayout';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 
@@ -19,7 +20,7 @@ export function App() {
             <Route index element={<PlaceholderPage title="首页看板" />} />
             <Route path="snapshots" element={<SnapshotPage />} />
             <Route path="institutions" element={<MasterDataPage />} />
-            <Route path="debts" element={<PlaceholderPage title="债权债务" />} />
+            <Route path="debts" element={<DebtPage />} />
             <Route path="settings" element={<CurrencySettingsPage />} />
           </Route>
         </Route>

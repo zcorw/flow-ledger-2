@@ -103,7 +103,7 @@ Flow Ledger 是一个面向个人私有使用的资金资产管理 Web 应用。
   Depends on: T003, T004。
   Verify: 批量校验、唯一性、缺失提醒、stale、无可用汇率阻断、异常变化提示和审计测试通过。
 
-- [ ] T006 [P1] 实现债权债务事件账本
+- [x] T006 [P1] 实现债权债务事件账本
   Goal: 债权与债务按新增、还款、调整和结清事件计算任意日期未偿本金。
   Notes: 余额由后端服务计算；禁止非法负数，调整产生负数时需要显式确认；事件后立即刷新汇总。
   Likely files/modules: debt item/event models, balance service, APIs, list and timeline UI。
