@@ -82,7 +82,7 @@ Flow Ledger 是一个面向个人私有使用的资金资产管理 Web 应用。
   Depends on: T001。
   Verify: 覆盖首次初始化、入口失效、登录/退出、未认证拦截和修改密码测试。
 
-- [ ] T003 [P0] 实现币种配置与历史汇率
+- [x] T003 [P0] 实现币种配置与历史汇率
   Goal: 管理员可启用最多五个币种，系统每天同步汇率并为历史快照提供确定的折算依据。
   Notes: CNY 必须启用且为基础币；实现精确 decimal 计算、历史查询、手动同步和最近历史汇率 fallback/stale 标记。
   Likely files/modules: currency/fx models and APIs；scheduler service；settings currency/fx UI。
