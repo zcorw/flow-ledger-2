@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Flow Ledger 个人资产管理静态产品原型">
+  <title>Flow Ledger · 静态产品原型</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <svg class="svg-sprite" aria-hidden="true">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.8 12 3l9 7.8v9.7a.5.5 0 0 1-.5.5h-5.7v-6.3H9.2V21H3.5a.5.5 0 0 1-.5-.5z"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18M8 14h3m2 0h3m-8 3h3"/></symbol>
+    <symbol id="i-building" viewBox="0 0 24 24"><path d="M4 21V8l8-5 8 5v13M8 10h2m4 0h2m-8 4h2m4 0h2m-8 4h2m4 0h2M2 21h20"/></symbol>
+    <symbol id="i-transfer" viewBox="0 0 24 24"><path d="M4 7h13m0 0-3-3m3 3-3 3M20 17H7m0 0 3 3m-3-3 3-3"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1A1.7 1.7 0 0 0 4.3 7l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Zm-8 12h4"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5m9.5-4A8 8 0 0 0 5.3 6M5.5 16A8 8 0 0 0 18.7 18"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 15v5h16v-5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12m0 0 5-5m-5 5-5-5M4 20h16"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 3h12l3 3v15H4V4a1 1 0 0 1 1-1Z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H19v16H6a2 2 0 0 1-2-2Z"/><path d="M4 8h15m-5 4h7v5h-7a2.5 2.5 0 0 1 0-5Z"/></symbol>
+    <symbol id="i-trend" viewBox="0 0 24 24"><path d="m4 17 5-5 4 3 7-8m0 0h-5m5 0v5"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 5 3 8 7 10 4-2 7-5 7-10V6Z"/><path d="m9 12 2 2 4-5"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18m0-18a15 15 0 0 0 0 18"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v5h5M9 13h6m-6 4h6"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8m-3 3 3 3m-6 0 3 3"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10m-7 6h4"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="m12 3 10 18H2Z"/><path d="M12 9v5m0 3h.01"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 4H4v16h6m4-4 4-4-4-4m4 4H9"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/></symbol>
+  </svg>
+
+  <div class="app-shell" id="appShell">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="brand-row">
+        <div class="brand-mark"><span></span><span></span><span></span></div>
+        <div class="brand-copy"><strong>Flow Ledger</strong><small>个人资产台账</small></div>
+        <button class="icon-button sidebar-close" id="sidebarClose" aria-label="关闭导航"><svg><use href="#i-close"></use></svg></button>
+      </div>
+
+      <nav class="main-nav">
+        <p class="nav-label">工作台</p>
+        <button class="nav-item is-active" data-page="dashboard"><svg><use href="#i-home"></use></svg><span>首页看板</span></button>
+        <button class="nav-item" data-page="snapshots"><svg><use href="#i-calendar"></use></svg><span>月度快照</span><em class="nav-count">1</em></button>
+        <button class="nav-item" data-page="institutions"><svg><use href="#i-building"></use></svg><span>机构与账户</span></button>
+        <button class="nav-item" data-page="debts"><svg><use href="#i-transfer"></use></svg><span>债权债务</span></button>
+        <p class="nav-label nav-label-space">系统</p>
+        <button class="nav-item" data-page="settings"><svg><use href="#i-settings"></use></svg><span>设置</span></button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="sync-card">
+          <div class="sync-icon"><svg><use href="#i-refresh"></use></svg></div>
+          <div><strong>汇率已同步</strong><small>今天 08:02 · 4 个币种</small></div>
+          <span class="status-dot"></span>
+        </div>
+        <button class="user-card" id="userMenuButton" aria-haspopup="true" aria-expanded="false">
+          <span class="avatar">周</span>
+          <span class="user-meta"><strong>周洲</strong><small>私有管理员</small></span>
+          <svg><use href="#i-chevron-down"></use></svg>
+        </button>
+      </div>
+    </aside>
+
+    <div class="sidebar-scrim" id="sidebarScrim"></div>
+
+    <section class="workspace">
+      <header class="topbar">
+        <div class="topbar-title">
+          <button class="icon-button menu-button" id="menuButton" aria-label="打开导航"><svg><use href="#i-menu"></use></svg></button>
+          <div><small>资产总览 / <span id="crumbText">首页看板</span></small><h1 id="pageTitle">首页看板</h1></div>
+        </div>
+        <div class="topbar-actions">
+          <button class="quiet-button desktop-only" data-modal="quick-entry"><svg><use href="#i-plus"></use></svg>快速录入</button>
+          <button class="icon-button notification-button" aria-label="通知" data-toast="暂无新的系统通知"><svg><use href="#i-bell"></use></svg><span></span></button>
+        </div>
+      </header>
+
+      <main class="main-content">
+        <section class="page is-active" data-page-panel="dashboard">
+          <div class="page-toolbar dashboard-toolbar">
+            <div>
+              <p class="eyebrow">截至当前快照</p>
+              <div class="inline-date"><svg><use href="#i-calendar"></use></svg><select aria-label="看板快照日期"><option>2026 年 7 月 31 日</option><option>2026 年 6 月 30 日</option><option>2026 年 5 月 31 日</option></select></div>
+            </div>
+            <div class="toolbar-note"><span class="status-pill success"><i></i>数据完整</span><small>12 个项目 · 3 笔债权债务</small></div>
+          </div>
+
+          <div class="kpi-grid">
+            <article class="kpi-card kpi-primary">
+              <div class="kpi-top"><span>当前净资产</span><span class="metric-icon"><svg><use href="#i-wallet"></use></svg></span></div>
+              <strong>¥ 1,286,420.00</strong>
+              <div class="kpi-foot"><span class="trend-up">↗ 2.48%</span><small>较上月 +¥ 31,120.00</small></div>
+            </article>
+            <article class="kpi-card">
+              <div class="kpi-top"><span>当前总资产</span><span class="micro-tag">ASSET</span></div>
+              <strong>¥ 1,428,900.00</strong>
+              <div class="kpi-foot"><span class="trend-up">+1.86%</span><small>含债权 ¥86,000</small></div>
+            </article>
+            <article class="kpi-card">
+              <div class="kpi-top"><span>当前总负债</span><span class="micro-tag coral">DEBT</span></div>
+              <strong>¥ 142,480.00</strong>
+              <div class="kpi-foot"><span class="trend-down">−¥ 7,920</span><small>较上月减少</small></div>
+            </article>
+            <article class="kpi-card">
+              <div class="kpi-top"><span>较上月变化</span><span class="metric-icon soft"><svg><use href="#i-trend"></use></svg></span></div>
+              <strong class="positive">+ ¥ 31,120.00</strong>
+              <div class="kpi-foot"><span>连续 4 月增长</span><small>金额变化</small></div>
+            </article>
+            <article class="kpi-card">
+              <div class="kpi-top"><span>外币正资产占比</span><span class="metric-icon blue"><svg><use href="#i-globe"></use></svg></span></div>
+              <strong>38.6%</strong>
+              <div class="kpi-foot"><span>USD 26.4%</span><small>JPY 8.2% · HKD 4.0%</small></div>
+            </article>
+          </div>
+
+          <div class="chart-grid chart-grid-main">
+            <article class="panel trend-panel">
+              <div class="panel-head"><div><h2>净资产月度趋势</h2><p>过去 12 个月 · CNY 折算</p></div><div class="legend"><span><i class="dot-green"></i>净资产</span><span><i class="dot-gray"></i>总资产</span></div></div>
+              <div class="trend-chart" role="img" aria-label="过去十二个月净资产趋势图">
+                <div class="y-axis"><span>160万</span><span>120万</span><span>80万</span><span>40万</span><span>0</span></div>
+                <svg viewBox="0 0 760 250" preserveAspectRatio="none" aria-hidden="true">
+                  <defs><linearGradient id="areaGreen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b7f68" stop-opacity=".22"/><stop offset="1" stop-color="#1b7f68" stop-opacity="0"/></linearGradient></defs>
+                  <g class="grid-lines"><path d="M0 20H760M0 75H760M0 130H760M0 185H760M0 240H760"/></g>
+                  <path class="asset-line" d="M10 156 C55 150,74 145,105 142 S165 130,198 132 S257 121,292 117 S354 110,386 104 S447 95,480 92 S542 83,574 75 S638 68,669 60 S717 55,750 45"/>
+                  <path class="net-area" d="M10 190 C55 184,74 179,105 176 S165 164,198 166 S257 155,292 150 S354 146,386 137 S447 129,480 125 S542 117,574 108 S638 102,669 92 S717 87,750 75 L750 240H10Z"/>
+                  <path class="net-line" d="M10 190 C55 184,74 179,105 176 S165 164,198 166 S257 155,292 150 S354 146,386 137 S447 129,480 125 S542 117,574 108 S638 102,669 92 S717 87,750 75"/>
+                  <g class="last-point"><circle cx="750" cy="75" r="7"/><circle cx="750" cy="75" r="3"/></g>
+                </svg>
+                <div class="chart-tooltip"><small>2026 年 7 月</small><strong>¥1,286,420</strong><span>较上月 +¥31,120</span></div>
+                <div class="x-axis"><span>8月</span><span>10月</span><span>12月</span><span>2月</span><span>4月</span><span>6月</span><span>7月</span></div>
+              </div>
+            </article>
+
+            <article class="panel composition-panel">
+              <div class="panel-head"><div><h2>资产组成</h2><p>正资产 · ¥1,428,900</p></div><button class="icon-button small"><svg><use href="#i-more"></use></svg></button></div>
+              <div class="donut-wrap">
+                <div class="donut"><div><strong>56.8%</strong><span>银行存款</span></div></div>
+                <div class="donut-legend">
+                  <div><span><i style="--c:#1b7f68"></i>银行存款</span><strong>¥811,400</strong></div>
+                  <div><span><i style="--c:#63b5a3"></i>证券资产</span><strong>¥428,500</strong></div>
+                  <div><span><i style="--c:#e4b363"></i>债权</span><strong>¥86,000</strong></div>
+                  <div><span><i style="--c:#8ba2b2"></i>现金</span><strong>¥103,000</strong></div>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <div class="chart-grid chart-grid-mini">
+            <article class="panel compact-panel">
+              <div class="panel-head"><div><h2>流动性分布</h2><p>资金可用时效</p></div><span class="panel-total">¥1.43m</span></div>
+              <div class="stacked-bar"><i style="--w:42%;--c:#176c5a"></i><i style="--w:22%;--c:#51a691"></i><i style="--w:18%;--c:#9bcabe"></i><i style="--w:12%;--c:#e4b363"></i><i style="--w:6%;--c:#c5cbd0"></i></div>
+              <div class="mini-list"><span><i style="--c:#176c5a"></i>T+0 <b>42%</b></span><span><i style="--c:#51a691"></i>7日内 <b>22%</b></span><span><i style="--c:#9bcabe"></i>30日内 <b>18%</b></span><span><i style="--c:#e4b363"></i>90日内 <b>12%</b></span></div>
+            </article>
+            <article class="panel compact-panel">
+              <div class="panel-head"><div><h2>风险分布</h2><p>按项目风险等级</p></div><span class="panel-total">12 项</span></div>
+              <div class="risk-row"><div class="risk-ring low">68</div><div><strong>低风险</strong><small>¥971,650 · 68%</small></div></div>
+              <div class="risk-lines"><span>中风险 <i><b style="width:24%"></b></i><em>24%</em></span><span>高风险 <i><b class="high" style="width:8%"></b></i><em>8%</em></span></div>
+            </article>
+            <article class="panel compact-panel currency-panel">
+              <div class="panel-head"><div><h2>币种占比</h2><p>只统计正资产</p></div><span class="status-pill neutral">4 币种</span></div>
+              <div class="currency-row"><span>CNY</span><i><b style="width:61.4%"></b></i><strong>61.4%</strong></div>
+              <div class="currency-row"><span>USD</span><i><b style="width:26.4%"></b></i><strong>26.4%</strong></div>
+              <div class="currency-row"><span>JPY</span><i><b style="width:8.2%"></b></i><strong>8.2%</strong></div>
+              <div class="currency-row"><span>HKD</span><i><b style="width:4%"></b></i><strong>4.0%</strong></div>
+            </article>
+          </div>
+
+          <div class="chart-grid chart-grid-bottom">
+            <article class="panel">
+              <div class="panel-head"><div><h2>Top 5 机构</h2><p>按正资产金额排序</p></div><button class="text-button" data-page-link="institutions">查看全部 <svg><use href="#i-chevron-right"></use></svg></button></div>
+              <div class="institution-ranking">
+                <div><span class="rank">01</span><span class="institution-logo cmb">招</span><span class="rank-name"><strong>招商银行</strong><small>4 个项目</small></span><i><b style="width:100%"></b></i><strong>¥536,800</strong></div>
+                <div><span class="rank">02</span><span class="institution-logo ib">IB</span><span class="rank-name"><strong>盈透证券</strong><small>2 个项目</small></span><i><b style="width:77%"></b></i><strong>¥412,500</strong></div>
+                <div><span class="rank">03</span><span class="institution-logo boc">中</span><span class="rank-name"><strong>中国银行</strong><small>2 个项目</small></span><i><b style="width:45%"></b></i><strong>¥241,600</strong></div>
+                <div><span class="rank">04</span><span class="institution-logo cash">现</span><span class="rank-name"><strong>现金</strong><small>2 个钱包</small></span><i><b style="width:19%"></b></i><strong>¥103,000</strong></div>
+                <div><span class="rank">05</span><span class="institution-logo person">林</span><span class="rank-name"><strong>个人债权</strong><small>1 笔应收</small></span><i><b style="width:16%"></b></i><strong>¥86,000</strong></div>
+              </div>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><div><h2>项目金额变化</h2><p>本月与上月 CNY 差额</p></div><button class="icon-button small"><svg><use href="#i-filter"></use></svg></button></div>
+              <div class="change-list">
+                <div><span class="change-arrow up">↗</span><span><strong>美股组合</strong><small>盈透证券 · USD</small></span><strong class="positive">+ ¥24,860</strong></div>
+                <div><span class="change-arrow up">↗</span><span><strong>季季宝</strong><small>招商银行 · CNY</small></span><strong class="positive">+ ¥18,200</strong></div>
+                <div><span class="change-arrow down">↘</span><span><strong>活期余额</strong><small>招商银行 · CNY</small></span><strong class="negative">− ¥9,840</strong></div>
+                <div><span class="change-arrow up">↗</span><span><strong>日元现金</strong><small>现金钱包 · JPY</small></span><strong class="positive">+ ¥3,640</strong></div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="page" data-page-panel="snapshots">
+          <div class="page-toolbar snapshots-toolbar">
+            <div class="field-group"><label>快照日期</label><button class="date-field"><svg><use href="#i-calendar"></use></svg><span>2026-07-31</span><svg><use href="#i-chevron-down"></use></svg></button></div>
+            <div class="toolbar-actions-group">
+              <button class="quiet-button" id="copyPrevious"><svg><use href="#i-copy"></use></svg>复制上月</button>
+              <button class="quiet-button" data-modal="snapshot-import"><svg><use href="#i-upload"></use></svg>导入快照</button>
+              <button class="primary-button" id="saveSnapshots"><svg><use href="#i-save"></use></svg>保存快照</button>
+            </div>
+          </div>
+
+          <div class="notice warning-notice" id="snapshotNotice">
+            <svg><use href="#i-alert"></use></svg><div><strong>还有 1 个项目未填写</strong><span>“人民币现金”缺少原币金额；保存前需要补充。2 个项目的金额变化较大，建议填写备注。</span></div><button class="text-button" id="focusMissing">定位项目</button>
+          </div>
+
+          <article class="panel data-panel">
+            <div class="table-tools">
+              <div class="segmented"><button class="is-active">全部项目 <span>12</span></button><button>有变化 <span>7</span></button><button>待处理 <span>3</span></button></div>
+              <div class="table-actions"><label class="search-box"><svg><use href="#i-search"></use></svg><input type="search" placeholder="搜索项目"></label><button class="icon-button small" aria-label="筛选"><svg><use href="#i-filter"></use></svg></button></div>
+            </div>
+            <div class="table-scroll snapshot-table-scroll">
+              <table class="data-table snapshot-table">
+                <thead><tr><th class="sticky-col">机构 / 账户</th><th>项目</th><th>类型</th><th>币种</th><th class="align-right">原币金额</th><th class="align-right">CNY 折算</th><th>汇率状态</th><th>流动性</th><th>风险</th><th class="align-right">较上月</th><th>备注</th></tr></thead>
+                <tbody>
+                  <tr><td class="sticky-col"><strong>招商银行</strong><small>储蓄卡 · 8842</small></td><td>活期余额</td><td><span class="plain-tag">银行存款</span></td><td><strong>CNY</strong></td><td><div class="money-input"><span>¥</span><input data-rate="1" value="128600.00" inputmode="decimal"></div></td><td class="converted align-right">¥128,600.00</td><td><span class="status-pill success compact"><i></i>基准币</span></td><td><select class="cell-select"><option>T+0</option></select></td><td><span class="risk-badge low">低</span></td><td class="align-right negative">−¥9,840</td><td><input class="note-input" placeholder="选填"></td></tr>
+                  <tr class="change-warning"><td class="sticky-col"><strong>招商银行</strong><small>财富管理</small></td><td>季季宝 <svg class="row-alert"><use href="#i-alert"></use></svg></td><td><span class="plain-tag">银行存款</span></td><td><strong>CNY</strong></td><td><div class="money-input"><span>¥</span><input data-rate="1" value="358200.00" inputmode="decimal"></div></td><td class="converted align-right">¥358,200.00</td><td><span class="status-pill success compact"><i></i>基准币</span></td><td><select class="cell-select"><option>30日内</option></select></td><td><span class="risk-badge low">低</span></td><td class="align-right positive">+¥18,200</td><td><input class="note-input emphasized" value="7 月追加资金"></td></tr>
+                  <tr class="change-warning"><td class="sticky-col"><strong>盈透证券</strong><small>综合账户 · U***63</small></td><td>美股组合 <svg class="row-alert"><use href="#i-alert"></use></svg></td><td><span class="plain-tag">证券资产</span></td><td><strong>USD</strong></td><td><div class="money-input"><span>$</span><input data-rate="7.1862" value="57400.00" inputmode="decimal"></div></td><td class="converted align-right">¥412,517.88</td><td><span class="fx-cell">7.1862 <span class="status-pill success compact"><i></i>当日</span></span></td><td><select class="cell-select"><option>T+7</option></select></td><td><span class="risk-badge high">高</span></td><td class="align-right positive">+¥24,860</td><td><input class="note-input" placeholder="建议说明原因"></td></tr>
+                  <tr><td class="sticky-col"><strong>中国银行</strong><small>外币储蓄 · 0371</small></td><td>美元定存</td><td><span class="plain-tag">银行存款</span></td><td><strong>USD</strong></td><td><div class="money-input"><span>$</span><input data-rate="7.1862" value="27200.00" inputmode="decimal"></div></td><td class="converted align-right">¥195,452.64</td><td><span class="fx-cell">7.1862 <span class="status-pill success compact"><i></i>当日</span></span></td><td><select class="cell-select"><option>90日内</option></select></td><td><span class="risk-badge low">低</span></td><td class="align-right positive">+¥1,950</td><td><input class="note-input" placeholder="选填"></td></tr>
+                  <tr><td class="sticky-col"><strong>中国银行</strong><small>外币储蓄 · 0371</small></td><td>日元定存</td><td><span class="plain-tag">银行存款</span></td><td><strong>JPY</strong></td><td><div class="money-input"><span>¥</span><input data-rate="0.04855" value="816500.00" inputmode="decimal"></div></td><td class="converted align-right">¥39,638.08</td><td><span class="fx-cell">0.04855 <span class="status-pill warning compact"><i></i>Stale · 07-30</span></span></td><td><select class="cell-select"><option>90日内</option></select></td><td><span class="risk-badge low">低</span></td><td class="align-right negative">−¥640</td><td><input class="note-input" placeholder="选填"></td></tr>
+                  <tr id="missingRow" class="missing-row"><td class="sticky-col"><strong>现金</strong><small>人民币钱包</small></td><td>人民币现金</td><td><span class="plain-tag">现金</span></td><td><strong>CNY</strong></td><td><div class="money-input invalid"><span>¥</span><input data-rate="1" value="" placeholder="必填" inputmode="decimal"></div></td><td class="converted align-right muted">—</td><td><span class="status-pill success compact"><i></i>基准币</span></td><td><select class="cell-select"><option>T+0</option></select></td><td><span class="risk-badge low">低</span></td><td class="align-right muted">—</td><td><input class="note-input" placeholder="选填"></td></tr>
+                  <tr><td class="sticky-col"><strong>现金</strong><small>日元钱包</small></td><td>日元现金</td><td><span class="plain-tag">现金</span></td><td><strong>JPY</strong></td><td><div class="money-input"><span>¥</span><input data-rate="0.04855" value="550000.00" inputmode="decimal"></div></td><td class="converted align-right">¥26,702.50</td><td><span class="fx-cell">0.04855 <span class="status-pill warning compact"><i></i>Stale · 07-30</span></span></td><td><select class="cell-select"><option>T+0</option></select></td><td><span class="risk-badge low">低</span></td><td class="align-right positive">+¥3,640</td><td><input class="note-input" placeholder="选填"></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-footer"><span>显示 7 / 12 个启用项目</span><div><span>已录入 <strong id="enteredCount">11</strong> 项</span><span>当前折算合计 <strong>¥1,428,900.00</strong></span></div></div>
+          </article>
+        </section>
+
+        <section class="page" data-page-panel="institutions">
+          <div class="page-toolbar">
+            <div><p class="page-intro">按机构管理账户和项目；停用项目仍保留历史数据。</p></div>
+            <div class="toolbar-actions-group"><button class="quiet-button" data-modal="institution-import"><svg><use href="#i-upload"></use></svg>导入基础数据</button><button class="primary-button" data-modal="institution"><svg><use href="#i-plus"></use></svg>新建机构</button></div>
+          </div>
+          <div class="entity-layout">
+            <aside class="institution-list panel">
+              <div class="entity-list-head"><h2>全部机构 <span>5</span></h2><button class="icon-button small"><svg><use href="#i-search"></use></svg></button></div>
+              <button class="institution-item is-active" data-institution="cmb"><span class="institution-logo cmb">招</span><span><strong>招商银行</strong><small>银行 · 2 个账户</small></span><em><strong>¥536,800</strong><small>37.6%</small></em></button>
+              <button class="institution-item" data-institution="ib"><span class="institution-logo ib">IB</span><span><strong>盈透证券</strong><small>券商 · 1 个账户</small></span><em><strong>¥412,500</strong><small>28.9%</small></em></button>
+              <button class="institution-item" data-institution="boc"><span class="institution-logo boc">中</span><span><strong>中国银行</strong><small>银行 · 1 个账户</small></span><em><strong>¥241,600</strong><small>16.9%</small></em></button>
+              <button class="institution-item" data-institution="cash"><span class="institution-logo cash">现</span><span><strong>现金</strong><small>现金 · 2 个钱包</small></span><em><strong>¥103,000</strong><small>7.2%</small></em></button>
+              <button class="institution-item" data-institution="person"><span class="institution-logo person">林</span><span><strong>个人债权</strong><small>个人 · 来自债权账本</small></span><em><strong>¥86,000</strong><small>6.0%</small></em></button>
+              <button class="add-list-button" data-modal="institution"><svg><use href="#i-plus"></use></svg>添加机构</button>
+            </aside>
+
+            <div class="entity-detail">
+              <article class="panel institution-hero">
+                <div class="hero-main"><span class="institution-logo cmb large">招</span><div><span class="status-pill success compact"><i></i>启用中</span><h2 id="institutionName">招商银行</h2><p id="institutionMeta">银行 · 2 个账户 · 4 个项目</p></div></div>
+                <div class="hero-value"><small>当前正资产</small><strong id="institutionValue">¥536,800.00</strong><span class="positive">本月 +¥8,360</span></div>
+                <button class="icon-button"><svg><use href="#i-more"></use></svg></button>
+              </article>
+
+              <div class="section-title-row"><div><h2>账户</h2><p>账户标识仅展示脱敏信息</p></div><button class="quiet-button" data-modal="account"><svg><use href="#i-plus"></use></svg>添加账户</button></div>
+              <div class="account-grid">
+                <button class="account-card is-active"><div><span class="account-icon"><svg><use href="#i-wallet"></use></svg></span><span><strong>储蓄卡</strong><small>尾号 8842 · 储蓄账户</small></span></div><strong>¥178,600.00</strong><span>2 个项目 <svg><use href="#i-chevron-right"></use></svg></span></button>
+                <button class="account-card"><div><span class="account-icon soft"><svg><use href="#i-trend"></use></svg></span><span><strong>财富管理</strong><small>理财账户</small></span></div><strong>¥358,200.00</strong><span>2 个项目 <svg><use href="#i-chevron-right"></use></svg></span></button>
+              </div>
+
+              <article class="panel data-panel project-panel">
+                <div class="panel-head table-panel-head"><div><h2>储蓄卡 · 项目</h2><p>本账户下 2 个启用项目</p></div><button class="primary-button small-button" data-modal="project"><svg><use href="#i-plus"></use></svg>添加项目</button></div>
+                <div class="table-scroll">
+                  <table class="data-table project-table"><thead><tr><th>项目名称</th><th>资产类型</th><th>币种</th><th>默认流动性</th><th>默认风险</th><th class="align-right">当前金额</th><th>状态</th><th></th></tr></thead><tbody>
+                    <tr><td><strong>活期余额</strong><small>日常收支缓冲资金</small></td><td>银行存款</td><td><strong>CNY</strong></td><td>T+0</td><td><span class="risk-badge low">低</span></td><td class="align-right"><strong>¥128,600.00</strong></td><td><span class="status-pill success compact"><i></i>启用</span></td><td><button class="icon-button small"><svg><use href="#i-more"></use></svg></button></td></tr>
+                    <tr><td><strong>备用金</strong><small>仅作紧急用途</small></td><td>银行存款</td><td><strong>CNY</strong></td><td>T+0</td><td><span class="risk-badge low">低</span></td><td class="align-right"><strong>¥50,000.00</strong></td><td><span class="status-pill success compact"><i></i>启用</span></td><td><button class="icon-button small"><svg><use href="#i-more"></use></svg></button></td></tr>
+                  </tbody></table>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" data-page-panel="debts">
+          <div class="page-toolbar">
+            <div class="tabs" role="tablist"><button class="is-active" data-debt-tab="receivable">债权 <span>2</span></button><button data-debt-tab="payable">债务 <span>1</span></button></div>
+            <div class="toolbar-actions-group"><button class="quiet-button" data-modal="debt-import"><svg><use href="#i-upload"></use></svg>导入事件</button><button class="primary-button" data-modal="debt"><svg><use href="#i-plus"></use></svg>新增债权债务</button></div>
+          </div>
+
+          <div class="debt-summary-grid">
+            <article class="summary-strip"><span class="metric-icon"><svg><use href="#i-transfer"></use></svg></span><div><small id="debtSummaryLabel">债权未偿本金</small><strong id="debtSummaryValue">¥86,000.00</strong></div><em class="positive">2 笔进行中</em></article>
+            <article class="summary-strip"><span class="metric-icon blue"><svg><use href="#i-globe"></use></svg></span><div><small>外币折算占比</small><strong>41.8%</strong></div><em>USD 1 笔</em></article>
+            <article class="summary-strip"><span class="metric-icon soft"><svg><use href="#i-clock"></use></svg></span><div><small>本月发生事件</small><strong>3</strong></div><em>最近 07-26</em></article>
+          </div>
+
+          <div class="debt-layout">
+            <article class="panel data-panel debt-list-panel">
+              <div class="table-tools"><label class="search-box"><svg><use href="#i-search"></use></svg><input type="search" placeholder="搜索交易对手"></label><button class="quiet-button"><svg><use href="#i-filter"></use></svg>筛选</button></div>
+              <div class="table-scroll"><table class="data-table debt-table"><thead><tr><th>交易对手</th><th>币种</th><th class="align-right">未偿本金</th><th class="align-right">CNY 折算</th><th>状态</th><th>最近事件</th></tr></thead><tbody id="debtTableBody">
+                <tr class="is-selected" data-debt="lin"><td><strong>林先生</strong><small>个人周转借款</small></td><td><strong>CNY</strong></td><td class="align-right">¥50,000.00</td><td class="align-right"><strong>¥50,000.00</strong></td><td><span class="status-pill warning compact"><i></i>部分偿还</span></td><td>2026-07-26</td></tr>
+                <tr data-debt="studio"><td><strong>North Studio</strong><small>项目垫付款</small></td><td><strong>USD</strong></td><td class="align-right">$5,009.65</td><td class="align-right"><strong>¥36,000.00</strong></td><td><span class="status-pill success compact"><i></i>进行中</span></td><td>2026-07-18</td></tr>
+              </tbody></table></div>
+            </article>
+
+            <aside class="panel debt-detail" id="debtDetail">
+              <div class="debt-detail-head"><div><span class="detail-type">债权详情</span><h2 id="debtDetailName">林先生</h2><p id="debtDetailNote">个人周转借款 · CNY</p></div><button class="icon-button small" data-toast="可在正式版本中关闭详情抽屉"><svg><use href="#i-close"></use></svg></button></div>
+              <div class="outstanding-card"><span>当前未偿本金</span><strong id="debtDetailValue">¥50,000.00</strong><small>折算 CNY · 截至 2026-07-31</small></div>
+              <div class="timeline-head"><div><h3>事件时间线</h3><small>3 个事件</small></div><button class="quiet-button small-button" data-modal="debt-event"><svg><use href="#i-plus"></use></svg>添加事件</button></div>
+              <div class="timeline" id="debtTimeline">
+                <div class="timeline-item"><span class="timeline-dot repayment"><svg><use href="#i-transfer"></use></svg></span><div><div><strong>收到还款</strong><em class="negative">− ¥30,000.00</em></div><p>银行转账，已核对</p><small>2026-07-26 · 周洲</small></div></div>
+                <div class="timeline-item"><span class="timeline-dot adjustment"><svg><use href="#i-refresh"></use></svg></span><div><div><strong>本金调整</strong><em class="positive">+ ¥10,000.00</em></div><p>经双方确认补充借款</p><small>2026-05-12 · 周洲</small></div></div>
+                <div class="timeline-item"><span class="timeline-dot issue"><svg><use href="#i-plus"></use></svg></span><div><div><strong>新增借出</strong><em class="positive">+ ¥70,000.00</em></div><p>首次借款</p><small>2026-03-08 · 周洲</small></div></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="page" data-page-panel="settings">
+          <div class="settings-layout">
+            <aside class="settings-nav panel">
+              <p class="nav-label">偏好与数据</p>
+              <button class="is-active" data-settings-target="currency-settings"><svg><use href="#i-globe"></use></svg>币种与汇率</button>
+              <button data-settings-target="import-settings"><svg><use href="#i-file"></use></svg>导入导出</button>
+              <button data-settings-target="backup-settings"><svg><use href="#i-database"></use></svg>备份与恢复</button>
+              <p class="nav-label nav-label-space">账户</p>
+              <button data-settings-target="security-settings"><svg><use href="#i-shield"></use></svg>账户安全</button>
+              <button data-settings-target="audit-settings"><svg><use href="#i-clock"></use></svg>操作日志</button>
+            </aside>
+
+            <div class="settings-content">
+              <section class="settings-section panel" id="currency-settings">
+                <div class="settings-section-head"><div><h2>币种设置</h2><p>基础币种固定为 CNY，最多启用 5 个币种。</p></div><span class="limit-badge">已启用 4 / 5</span></div>
+                <div class="currency-settings-grid">
+                  <label class="currency-toggle locked"><span class="currency-symbol cny">¥</span><span><strong>CNY</strong><small>人民币 · 基础币种</small></span><input type="checkbox" checked disabled><i></i></label>
+                  <label class="currency-toggle"><span class="currency-symbol usd">$</span><span><strong>USD</strong><small>美元</small></span><input type="checkbox" checked><i></i></label>
+                  <label class="currency-toggle"><span class="currency-symbol jpy">¥</span><span><strong>JPY</strong><small>日元</small></span><input type="checkbox" checked><i></i></label>
+                  <label class="currency-toggle"><span class="currency-symbol hkd">HK$</span><span><strong>HKD</strong><small>港币</small></span><input type="checkbox" checked><i></i></label>
+                  <label class="currency-toggle"><span class="currency-symbol eur">€</span><span><strong>EUR</strong><small>欧元</small></span><input type="checkbox"><i></i></label>
+                </div>
+                <div class="settings-divider"></div>
+                <div class="settings-subhead"><div><h3>最新汇率</h3><p>1 单位外币可兑换的 CNY 金额</p></div><button class="quiet-button" id="syncRates"><svg><use href="#i-refresh"></use></svg>立即同步</button></div>
+                <div class="fx-table"><div class="fx-row header"><span>币种</span><span>最新汇率</span><span>数据日期</span><span>状态</span></div><div class="fx-row"><span><b>USD</b> / CNY</span><strong>7.186200</strong><span>2026-07-31</span><span class="status-pill success compact"><i></i>最新</span></div><div class="fx-row"><span><b>JPY</b> / CNY</span><strong>0.048550</strong><span>2026-07-30</span><span class="status-pill warning compact"><i></i>Stale</span></div><div class="fx-row"><span><b>HKD</b> / CNY</span><strong>0.919320</strong><span>2026-07-31</span><span class="status-pill success compact"><i></i>最新</span></div></div>
+                <div class="sync-meta"><svg><use href="#i-check"></use></svg><span><strong>最近同步成功</strong><small>2026-08-01 08:02:14 · 下一次同步：明天 08:00</small></span><button class="text-button" data-toast="汇率同步历史将在正式版本中展开">查看同步历史</button></div>
+              </section>
+
+              <section class="settings-section panel" id="import-settings">
+                <div class="settings-section-head"><div><h2>导入与导出</h2><p>下载标准模板，填写后先校验再提交；发生冲突时不会写入部分数据。</p></div></div>
+                <div class="import-card-grid">
+                  <article><span class="file-icon"><svg><use href="#i-building"></use></svg></span><div><strong>机构 / 账户 / 项目</strong><small>维护资产基础层级和项目属性</small></div><button class="quiet-button small-button" data-toast="基础数据模板已准备下载"><svg><use href="#i-download"></use></svg>模板</button><button class="primary-button ghost small-button" data-modal="institution-import"><svg><use href="#i-upload"></use></svg>上传</button></article>
+                  <article><span class="file-icon"><svg><use href="#i-calendar"></use></svg></span><div><strong>月度快照</strong><small>批量导入某个快照日的项目余额</small></div><button class="quiet-button small-button" data-toast="快照模板已准备下载"><svg><use href="#i-download"></use></svg>模板</button><button class="primary-button ghost small-button" data-modal="snapshot-import"><svg><use href="#i-upload"></use></svg>上传</button></article>
+                  <article><span class="file-icon"><svg><use href="#i-transfer"></use></svg></span><div><strong>债权债务事件</strong><small>批量导入新增、还款、调整或结清</small></div><button class="quiet-button small-button" data-toast="债权债务模板已准备下载"><svg><use href="#i-download"></use></svg>模板</button><button class="primary-button ghost small-button" data-modal="debt-import"><svg><use href="#i-upload"></use></svg>上传</button></article>
+                </div>
+              </section>
+
+              <section class="settings-section panel danger-section" id="backup-settings">
+                <div class="settings-section-head"><div><h2>备份与恢复</h2><p>完整备份包含全部业务数据。恢复会全量替换当前数据。</p></div></div>
+                <div class="backup-actions"><div><span class="metric-icon"><svg><use href="#i-download"></use></svg></span><span><strong>导出完整备份</strong><small>最近导出：2026-07-28 21:35 · 4.8 MB</small></span><button class="quiet-button" data-toast="正在生成加密备份…">立即导出</button></div><div><span class="metric-icon danger"><svg><use href="#i-refresh"></use></svg></span><span><strong>恢复完整备份</strong><small>需要重新输入密码；恢复前将自动备份当前数据</small></span><button class="danger-button" data-modal="restore">选择备份并恢复</button></div></div>
+              </section>
+
+              <section class="settings-section panel" id="security-settings">
+                <div class="settings-section-head"><div><h2>账户安全</h2><p>管理管理员凭据和会话安全。</p></div></div>
+                <div class="security-row"><span class="metric-icon soft"><svg><use href="#i-key"></use></svg></span><div><strong>登录密码</strong><small>上次修改于 2026-06-02</small></div><button class="quiet-button" data-modal="password">修改密码</button></div>
+                <div class="security-row"><span class="metric-icon blue"><svg><use href="#i-clock"></use></svg></span><div><strong>当前会话</strong><small>Windows · Tokyo, Japan · 刚刚活跃</small></div><span class="status-pill success"><i></i>当前设备</span></div>
+              </section>
+
+              <section class="settings-section panel" id="audit-settings">
+                <div class="settings-section-head"><div><h2>最近操作</h2><p>金额变更、导入导出、恢复和认证事件都会保留记录。</p></div><button class="text-button">查看全部</button></div>
+                <div class="audit-list"><div><span class="audit-icon success"><svg><use href="#i-save"></use></svg></span><span><strong>更新月度快照</strong><small>2026-07-31 · 修改 11 个项目</small></span><time>今天 09:42</time></div><div><span class="audit-icon"><svg><use href="#i-refresh"></use></svg></span><span><strong>汇率自动同步</strong><small>USD、JPY、HKD 同步完成</small></span><time>今天 08:02</time></div><div><span class="audit-icon"><svg><use href="#i-user"></use></svg></span><span><strong>管理员登录</strong><small>Windows · Tokyo, Japan</small></span><time>今天 07:55</time></div></div>
+              </section>
+            </div>
+          </div>
+        </section>
+      </main>
+    </section>
+  </div>
+
+  <div class="profile-menu" id="profileMenu" role="menu">
+    <div><span class="avatar">周</span><span><strong>周洲</strong><small>zhou@example.com</small></span></div>
+    <button data-auth-preview="login"><svg><use href="#i-eye"></use></svg>预览登录页</button>
+    <button data-auth-preview="setup"><svg><use href="#i-shield"></use></svg>预览首次初始化</button>
+    <button data-toast="这是静态原型，不会退出当前页面"><svg><use href="#i-logout"></use></svg>退出登录</button>
+  </div>
+
+  <div class="modal-layer" id="modalLayer" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head"><div><span class="modal-eyebrow">FLOW LEDGER</span><h2 id="modalTitle">操作</h2></div><button class="icon-button" data-close-modal aria-label="关闭弹窗"><svg><use href="#i-close"></use></svg></button></div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-foot" id="modalFoot"><button class="quiet-button" data-close-modal>取消</button><button class="primary-button" id="modalConfirm">确认</button></div>
+    </div>
+  </div>
+
+  <section class="auth-preview" id="authPreview" aria-hidden="true">
+    <div class="auth-visual">
+      <div class="auth-brand"><div class="brand-mark light"><span></span><span></span><span></span></div><strong>Flow Ledger</strong></div>
+      <div class="auth-visual-copy"><span>PRIVATE WEALTH OVERVIEW</span><h2>资产有迹可循，<br>决策自然从容。</h2><p>用一份清晰的月度快照，整理分散在不同机构、币种与借贷关系中的资产。</p></div>
+      <div class="auth-mini-dashboard"><div><span>当前净资产</span><strong>¥ 1,286,420</strong><em>↗ 2.48%</em></div><svg viewBox="0 0 420 120" preserveAspectRatio="none"><path d="M0 94 C45 92,55 80,90 82 S145 70,180 72 S240 56,274 59 S330 37,420 26 L420 120H0Z"/><path d="M0 94 C45 92,55 80,90 82 S145 70,180 72 S240 56,274 59 S330 37,420 26"/></svg></div>
+      <small>你的数据仅保存在自己的私有服务器中</small>
+    </div>
+    <div class="auth-form-area">
+      <button class="auth-back" id="authBack"><svg><use href="#i-chevron-left"></use></svg>返回产品原型</button>
+      <div class="auth-form-card" data-auth-panel="login">
+        <span class="auth-kicker">欢迎回来</span><h1>登录 Flow Ledger</h1><p>继续查看和维护你的资产快照。</p>
+        <form class="auth-form" onsubmit="return false"><label>邮箱地址<input type="email" value="zhou@example.com"></label><label>密码<div class="password-field"><input type="password" value="password123"><button type="button"><svg><use href="#i-eye"></use></svg></button></div></label><div class="auth-form-meta"><label class="check-label"><input type="checkbox" checked>保持登录</label><button type="button" class="text-button">忘记密码？</button></div><button type="button" class="primary-button auth-submit" id="fakeLogin">登录</button></form>
+        <div class="auth-security"><svg><use href="#i-shield"></use></svg><span><strong>私有单用户系统</strong><small>系统不开放公开注册</small></span></div>
+      </div>
+      <div class="auth-form-card" data-auth-panel="setup" hidden>
+        <span class="auth-kicker">首次部署</span><h1>初始化管理员</h1><p>验证部署令牌并创建唯一的管理员账户。</p>
+        <div class="setup-steps"><span class="active">1</span><i></i><span>2</span><i></i><span>3</span></div>
+        <form class="auth-form" onsubmit="return false"><label>Bootstrap Token<input type="text" placeholder="输入 VPS 环境变量中的令牌"></label><div class="two-fields"><label>显示名称<input type="text" value="周洲"></label><label>管理员邮箱<input type="email" value="zhou@example.com"></label></div><label>设置密码<div class="password-field"><input type="password" placeholder="至少 12 位字符"><button type="button"><svg><use href="#i-eye"></use></svg></button></div></label><div class="password-hint"><span></span><span></span><span></span><span></span><small>建议使用大小写字母、数字和符号</small></div><button type="button" class="primary-button auth-submit" id="fakeSetup">创建管理员并初始化</button></form>
+        <p class="setup-note"><svg><use href="#i-info"></use></svg>完成后初始化入口会永久失效，并自动创建默认币种和现金机构。</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"><span><svg><use href="#i-check"></use></svg></span><div><strong>操作已完成</strong><small id="toastMessage"></small></div><button class="icon-button small" id="toastClose"><svg><use href="#i-close"></use></svg></button></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
