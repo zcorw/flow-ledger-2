@@ -89,7 +89,7 @@ Flow Ledger 是一个面向个人私有使用的资金资产管理 Web 应用。
   Depends on: T002。
   Verify: 测试币种上限、CNY 约束、同步历史写入、指定日期命中及 stale fallback。
 
-- [ ] T004 [P0] 实现机构、账户与项目管理
+- [x] T004 [P0] 实现机构、账户与项目管理
   Goal: 用户可建立完整资产层级并维护现金钱包，停用项目保留历史但退出新月份必填范围。
   Notes: 仅保存账户脱敏标识；项目在账户上下文内维护，不增加一级项目导航。
   Likely files/modules: institution/account/project models, APIs and frontend feature pages。

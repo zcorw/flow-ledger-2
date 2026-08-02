@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from fastapi.testclient import TestClient
 
 os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 os.environ["APP_ENV"] = "test"
@@ -11,6 +12,7 @@ import app.models  # noqa: E402, F401
 from app.core.config import get_settings  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import get_engine  # noqa: E402
+from app.main import app  # noqa: E402
 
 get_settings.cache_clear()
 get_engine.cache_clear()
@@ -22,3 +24,9 @@ def reset_database():
     Base.metadata.create_all(engine)
     yield
     Base.metadata.drop_all(engine)
+
+
+@pytest.fixture
+def client():
+    with TestClient(app) as test_client:
+        yield test_client
