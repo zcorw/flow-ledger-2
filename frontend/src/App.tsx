@@ -6,8 +6,8 @@ import { MasterDataPage } from './features/assets/MasterDataPage';
 import { CurrencySettingsPage } from './features/settings/CurrencySettingsPage';
 import { SnapshotPage } from './features/snapshots/SnapshotPage';
 import { DebtPage } from './features/debts/DebtPage';
+import { DashboardPage } from './features/dashboard/DashboardPage';
 import { AppLayout } from './layout/AppLayout';
-import { PlaceholderPage } from './pages/PlaceholderPage';
 
 export function App() {
   return (
@@ -17,7 +17,7 @@ export function App() {
         <Route path="/setup" element={<SetupPage />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
-            <Route index element={<PlaceholderPage title="首页看板" />} />
+            <Route index element={<DashboardPage />} />
             <Route path="snapshots" element={<SnapshotPage />} />
             <Route path="institutions" element={<MasterDataPage />} />
             <Route path="debts" element={<DebtPage />} />

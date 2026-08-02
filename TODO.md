@@ -110,7 +110,7 @@ Flow Ledger 是一个面向个人私有使用的资金资产管理 Web 应用。
   Depends on: T003。
   Verify: 不同事件序列、日期截点、币种折算、非法余额和状态流转测试通过。
 
-- [ ] T007 [P1] 实现首页看板与统计口径
+- [x] T007 [P1] 实现首页看板与统计口径
   Goal: 首页按选定快照日展示 KPI、趋势、各类分布、Top 5 机构和项目金额变化。
   Notes: 总资产只含正资产和债权；币种占比只含正资产；Top 5 不受债务影响；禁止使用“收益”命名。
   Likely files/modules: dashboard aggregation service/APIs；KPI, ECharts and ranking components。
