@@ -68,7 +68,7 @@ Flow Ledger 是一个面向个人私有使用的资金资产管理 Web 应用。
   Depends on: None。
   Verify: 本地静态服务器打开页面；逐项检查主导航、弹窗、抽屉、编辑状态和窄屏布局。
 
-- [ ] T001 [P0] 建立 monorepo 与本地运行骨架
+- [x] T001 [P0] 建立 monorepo 与本地运行骨架
   Goal: React 前端、FastAPI 后端、Postgres 和 scheduler 可独立构建并由 Docker Compose 联合启动。
   Notes: 配置 TypeScript、MUI、TanStack Query、React Hook Form、Zod、ECharts、SQLAlchemy、Alembic、测试与 lint。
   Likely files/modules: `frontend/`, `backend/`, `deploy/`, `docker-compose.yml`, CI workflow。

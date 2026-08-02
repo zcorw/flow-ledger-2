@@ -1,0 +1,13 @@
+{
+  "name": "flow-ledger",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.33.1",
+  "scripts": {
+    "dev": "pnpm --filter @flow-ledger/frontend dev",
+    "lint": "pnpm --filter @flow-ledger/frontend lint",
+    "typecheck": "pnpm --filter @flow-ledger/frontend typecheck",
+    "test": "pnpm --filter @flow-ledger/frontend test",
+    "build": "pnpm --filter @flow-ledger/frontend build"
+  }
+}
