@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     fx_sync_time: str = "08:00"
     timezone: str = "Asia/Tokyo"
     backup_dir: str = "./backups"
+    log_dir: str | None = None
 
     @model_validator(mode="after")
     def reject_unsafe_production_secrets(self) -> "Settings":

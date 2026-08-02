@@ -131,7 +131,7 @@ Flow Ledger 是一个面向个人私有使用的资金资产管理 Web 应用。
   Depends on: T002-T008。
   Verify: CI 中 lint、typecheck、test、build、migration 和 E2E 全部通过。
 
-- [ ] T010 [P1] 完成生产部署与运维
+- [x] T010 [P1] 完成生产部署与运维
   Goal: main 分支可部署到单台 VPS，支持 TLS、迁移、健康检查、日志和可恢复备份。
   Notes: Docker Compose 包含 frontend/backend/scheduler/postgres/proxy；密钥只来自环境变量；备份至少保留 14 天。
   Likely files/modules: production compose, Dockerfiles, reverse proxy, CI/CD workflow, backup scripts, runbook。

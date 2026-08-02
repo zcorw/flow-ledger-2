@@ -1,0 +1,194 @@
+name: flow-ledger-production
+
+x-app-environment: &app-environment
+  APP_ENV: ${APP_ENV:-production}
+  APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
+  DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+  SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+  BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?BOOTSTRAP_TOKEN is required}
+  BASE_CURRENCY: ${BASE_CURRENCY:-CNY}
+  CURRENCY_LIMIT: ${CURRENCY_LIMIT:-5}
+  FX_SYNC_TIME: ${FX_SYNC_TIME:-08:00}
+  TIMEZONE: ${TZ:-Asia/Tokyo}
+  BACKUP_DIR: /var/backups/flow-ledger
+  LOG_DIR: /var/log/flow-ledger
+
+x-backend-image: &backend-image
+  image: flow-ledger-backend:${IMAGE_TAG:-latest}
+  build:
+    context: ../backend
+
+x-service-hardening: &service-hardening
+  security_opt:
+    - no-new-privileges:true
+  read_only: true
+  tmpfs:
+    - /tmp
+
+x-json-logging: &json-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-flow_ledger}
+      POSTGRES_USER: ${POSTGRES_USER:-flow_ledger}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flow_ledger} -d ${POSTGRES_DB:-flow_ledger}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *json-logging
+
+  migrate:
+    <<: [*backend-image, *service-hardening]
+    environment: *app-environment
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+    restart: "no"
+    logging: *json-logging
+
+  backend:
+    <<: [*backend-image, *service-hardening]
+    restart: unless-stopped
+    environment: *app-environment
+    volumes:
+      - backend_logs:/var/log/flow-ledger
+    networks:
+      - app
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.healthcheck", "api"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging: *json-logging
+
+  scheduler:
+    <<: [*backend-image, *service-hardening]
+    restart: unless-stopped
+    environment: *app-environment
+    command: ["python", "-m", "app.scheduler"]
+    volumes:
+      - scheduler_logs:/var/log/flow-ledger
+    networks:
+      - app
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.healthcheck", "scheduler"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *json-logging
+
+  frontend:
+    image: flow-ledger-frontend:${IMAGE_TAG:-latest}
+    build:
+      context: ../frontend
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    logging: *json-logging
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN is required}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ${CADDYFILE:-./Caddyfile}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    networks:
+      - app
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    logging: *json-logging
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${POSTGRES_DB:-flow_ledger}
+      PGUSER: ${POSTGRES_USER:-flow_ledger}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_CRON: ${BACKUP_CRON:-0 2 * * *}
+      BACKUP_ON_START: ${BACKUP_ON_START:-true}
+    entrypoint: ["/bin/sh"]
+    command: ["/scripts/backup-entrypoint.sh"]
+    volumes:
+      - ./backup.sh:/scripts/backup.sh:ro
+      - ./backup-entrypoint.sh:/scripts/backup-entrypoint.sh:ro
+      - ./restore.sh:/scripts/restore.sh:ro
+      - backup_data:/backups
+      - backup_logs:/var/log/flow-ledger
+    networks:
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h postgres -U $$PGUSER -d $$PGDATABASE"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    logging: *json-logging
+
+networks:
+  app:
+  data:
+    internal: true
+
+volumes:
+  postgres_data:
+  backup_data:
+  backend_logs:
+  scheduler_logs:
+  backup_logs:
+  caddy_data:
+  caddy_config:
+  caddy_logs:

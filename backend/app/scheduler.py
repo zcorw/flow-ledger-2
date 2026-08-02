@@ -6,16 +6,26 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import select
 
 from app.core.config import get_settings
+from app.core.logging import configure_logging
 from app.db.session import get_session_factory
+from app.models.common import utc_now
+from app.models.configuration import AppSetting
 from app.models.user import User
 from app.services.fx import get_fx_provider, sync_enabled_rates
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 def heartbeat() -> None:
     now = datetime.now(tz=ZoneInfo(get_settings().timezone))
+    with get_session_factory()() as db:
+        item = db.scalar(select(AppSetting).where(AppSetting.key == "scheduler_heartbeat"))
+        value = {"at": utc_now().isoformat()}
+        if item is None:
+            db.add(AppSetting(key="scheduler_heartbeat", value=value))
+        else:
+            item.value = value
+        db.commit()
     logger.info("Flow Ledger scheduler heartbeat at %s", now)
 
 
@@ -30,6 +40,7 @@ def sync_fx_rates() -> None:
 
 def run() -> None:
     settings = get_settings()
+    configure_logging("scheduler", settings.log_dir)
     scheduler = BlockingScheduler(timezone=settings.timezone)
     hour, minute = (int(part) for part in settings.fx_sync_time.split(":", maxsplit=1))
     scheduler.add_job(
@@ -47,6 +58,7 @@ def run() -> None:
         id="scheduler-heartbeat",
         replace_existing=True,
     )
+    heartbeat()
     logger.info("Scheduler started; FX sync scheduled daily at %s", settings.fx_sync_time)
     scheduler.start()
 
