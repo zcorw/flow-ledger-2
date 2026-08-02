@@ -4,6 +4,7 @@ import { ProtectedRoute } from './features/auth/ProtectedRoute';
 import { SetupPage } from './features/auth/SetupPage';
 import { MasterDataPage } from './features/assets/MasterDataPage';
 import { CurrencySettingsPage } from './features/settings/CurrencySettingsPage';
+import { SnapshotPage } from './features/snapshots/SnapshotPage';
 import { AppLayout } from './layout/AppLayout';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 
@@ -16,7 +17,7 @@ export function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
             <Route index element={<PlaceholderPage title="首页看板" />} />
-            <Route path="snapshots" element={<PlaceholderPage title="月度快照" />} />
+            <Route path="snapshots" element={<SnapshotPage />} />
             <Route path="institutions" element={<MasterDataPage />} />
             <Route path="debts" element={<PlaceholderPage title="债权债务" />} />
             <Route path="settings" element={<CurrencySettingsPage />} />

@@ -96,7 +96,7 @@ Flow Ledger 是一个面向个人私有使用的资金资产管理 Web 应用。
   Depends on: T002, T003。
   Verify: CRUD、唯一约束、现金钱包、停用项目及历史可见性测试通过。
 
-- [ ] T005 [P0] 实现月度快照批量录入
+- [x] T005 [P0] 实现月度快照批量录入
   Goal: 用户可选择日期、复制上月清单、编辑并批量保存项目余额，系统正确折算 CNY。
   Notes: 持久化快照时使用的汇率与折算值；变化超过 20,000 CNY 或 20% 时提示备注；历史编辑写审计日志。
   Likely files/modules: monthly snapshot model/service/API；Data Grid page；validation schemas。

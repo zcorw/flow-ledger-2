@@ -1,4 +1,4 @@
-from app.models.asset import Account, Project
+from app.models.asset import Account, MonthlySnapshot, Project
 from app.models.audit import AuditLog
 from app.models.auth import AuthSession
 from app.models.configuration import AppSetting, Currency, UserCurrency
@@ -15,6 +15,7 @@ __all__ = [
     "FxRate",
     "FxSyncRun",
     "Institution",
+    "MonthlySnapshot",
     "Project",
     "User",
     "UserCurrency",
