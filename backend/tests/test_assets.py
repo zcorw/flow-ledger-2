@@ -108,3 +108,61 @@ def test_cash_wallet_and_owner_boundaries(client: TestClient) -> None:
     assert wallet.status_code == 201
     missing = client.get("/api/v1/institutions/00000000-0000-0000-0000-000000000000/accounts")
     assert missing.status_code == 404
+
+
+def test_account_can_be_created_then_associated_with_an_institution(
+    client: TestClient,
+) -> None:
+    bootstrap(client)
+    cash = client.get("/api/v1/institutions").json()[0]
+    account_payload = {
+        "name": "待整理账户",
+        "accountType": "savings",
+        "maskedIdentifier": "尾号 1357",
+        "isActive": True,
+    }
+
+    account = client.post("/api/v1/accounts", json=account_payload)
+    assert account.status_code == 201
+    account_id = account.json()["id"]
+    assert account.json()["institution_id"] is None
+    assert client.post("/api/v1/accounts", json=account_payload).status_code == 409
+
+    unassigned = client.get("/api/v1/accounts/unassigned")
+    assert unassigned.status_code == 200
+    assert unassigned.json()[0]["id"] == account_id
+
+    project = client.post(
+        "/api/v1/projects",
+        json={
+            "accountId": account_id,
+            "name": "待关联余额",
+            "assetType": "bank_deposit",
+            "currencyCode": "CNY",
+            "defaultLiquidityLevel": "t0",
+            "defaultRiskLevel": "low",
+        },
+    )
+    assert project.status_code == 201
+    project_id = project.json()["id"]
+    snapshot = client.get("/api/v1/snapshots", params={"date": "2026-07-31"})
+    assert all(item["project_id"] != project_id for item in snapshot.json()["rows"])
+
+    associated_payload = {**account_payload, "institutionId": cash["id"]}
+    associated = client.put(f"/api/v1/accounts/{account_id}", json=associated_payload)
+    assert associated.status_code == 200
+    assert associated.json()["institution_id"] == cash["id"]
+    assert client.get("/api/v1/accounts/unassigned").json() == []
+    assert client.get(f"/api/v1/institutions/{cash['id']}/accounts").json()[0]["id"] == account_id
+
+    snapshot = client.get("/api/v1/snapshots", params={"date": "2026-07-31"})
+    assert any(item["project_id"] == project_id for item in snapshot.json()["rows"])
+
+    unlinked = client.put(
+        f"/api/v1/accounts/{account_id}",
+        json={**account_payload, "institutionId": None},
+    )
+    assert unlinked.status_code == 200
+    assert unlinked.json()["institution_id"] is None
+    snapshot = client.get("/api/v1/snapshots", params={"date": "2026-07-31"})
+    assert all(item["project_id"] != project_id for item in snapshot.json()["rows"])

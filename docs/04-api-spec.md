@@ -153,13 +153,17 @@ API 前缀：`/api/v1`
 
 返回机构下账户。
 
+### GET /accounts/unassigned
+
+返回当前用户尚未关联机构的账户。
+
 ### POST /accounts
 
-创建账户。
+创建账户。`institutionId` 可为 `null` 或省略，表示稍后关联机构。
 
 ### PUT /accounts/{id}
 
-更新账户。
+更新账户。传入机构 ID 可完成关联，传入 `null` 可解除关联。
 
 ### GET /accounts/{id}/projects
 

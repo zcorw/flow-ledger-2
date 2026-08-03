@@ -17,7 +17,7 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   context,
   page,
 }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(120_000);
   await page.goto('/setup');
   await expect(page.getByRole('heading', { name: '初始化管理员' })).toBeVisible();
   await expectNoSeriousAccessibilityIssues(page, 'setup');
@@ -46,6 +46,23 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
     page.getByRole('heading', { level: 4, name: '机构与账户', exact: true }),
   ).toBeVisible();
   const addButtons = page.getByRole('button', { name: '新增' });
+
+  await addButtons.nth(1).click();
+  const unassignedAccountDialog = page.getByRole('dialog');
+  await unassignedAccountDialog.getByLabel('名称').fill('E2E Account');
+  await unassignedAccountDialog.getByLabel('所属机构').click();
+  await page.getByRole('option', { name: '暂不关联（稍后设置）' }).click();
+  await unassignedAccountDialog.getByLabel('脱敏标识').fill('尾号 2468');
+  await unassignedAccountDialog.getByLabel('选择自定义显示颜色').fill('#66558c');
+  await expect(unassignedAccountDialog.getByLabel('选择自定义显示颜色')).toHaveValue('#66558c');
+  const unassignedAccountRequestPromise = page.waitForRequest(
+    (request) => request.url().endsWith('/api/v1/accounts') && request.method() === 'POST',
+  );
+  await unassignedAccountDialog.getByRole('button', { name: '保存' }).click();
+  expect((await unassignedAccountRequestPromise).postDataJSON().institutionId).toBeNull();
+  await page.getByText('待关联账户', { exact: true }).click();
+  await expect(page.getByText('E2E Account', { exact: true })).toBeVisible();
+
   await addButtons.nth(0).click();
   const institutionDialog = page.getByRole('dialog');
   await institutionDialog.getByLabel('名称').fill('E2E Bank');
@@ -59,14 +76,18 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   const institutionRequest = await institutionRequestPromise;
   expect(institutionRequest.postDataJSON().displayColor).toBe('#397c93');
   await expect(page.getByText('E2E Bank', { exact: true })).toBeVisible();
-  await page.getByText('E2E Bank', { exact: true }).click();
 
-  await addButtons.nth(1).click();
-  await page.getByRole('dialog').getByLabel('名称').fill('E2E Account');
-  await page.getByRole('dialog').getByLabel('脱敏标识').fill('尾号 2468');
-  await page.getByRole('dialog').getByLabel('选择自定义显示颜色').fill('#66558c');
-  await expect(page.getByRole('dialog').getByLabel('选择自定义显示颜色')).toHaveValue('#66558c');
-  await page.getByRole('dialog').getByRole('button', { name: '保存' }).click();
+  await page.getByRole('button', { name: '编辑账户 E2E Account' }).click();
+  const associateAccountDialog = page.getByRole('dialog');
+  await associateAccountDialog.getByLabel('所属机构').click();
+  await page.getByRole('option', { name: 'E2E Bank' }).click();
+  const associateAccountRequestPromise = page.waitForRequest(
+    (request) => request.url().includes('/api/v1/accounts/') && request.method() === 'PUT',
+  );
+  await associateAccountDialog.getByRole('button', { name: '保存' }).click();
+  expect((await associateAccountRequestPromise).postDataJSON().institutionId).toBeTruthy();
+  await expect(associateAccountDialog).not.toBeVisible();
+  await page.getByText('E2E Bank', { exact: true }).click();
   await expect(page.getByText('E2E Account', { exact: true })).toBeVisible();
   await page.getByText('E2E Account', { exact: true }).click();
 

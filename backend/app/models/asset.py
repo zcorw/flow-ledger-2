@@ -12,6 +12,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -23,13 +24,21 @@ class Account(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "accounts"
     __table_args__ = (
         UniqueConstraint("institution_id", "name", name="uq_account_institution_name"),
+        Index(
+            "uq_accounts_user_unassigned_name",
+            "user_id",
+            "name",
+            unique=True,
+            postgresql_where=text("institution_id IS NULL"),
+            sqlite_where=text("institution_id IS NULL"),
+        ),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
-    institution_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("institutions.id", ondelete="CASCADE"), index=True
+    institution_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("institutions.id", ondelete="CASCADE"), index=True, nullable=True
     )
     name: Mapped[str] = mapped_column(String(150))
     account_type: Mapped[str] = mapped_column(String(40))

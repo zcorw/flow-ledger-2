@@ -41,7 +41,7 @@ class InstitutionResponse(BaseModel):
 
 
 class AccountPayload(NamedPayload):
-    institution_id: uuid.UUID = Field(alias="institutionId")
+    institution_id: uuid.UUID | None = Field(default=None, alias="institutionId")
     account_type: AccountType = Field(alias="accountType")
     masked_identifier: str | None = Field(default=None, alias="maskedIdentifier", max_length=80)
 
@@ -58,7 +58,7 @@ class AccountResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    institution_id: uuid.UUID
+    institution_id: uuid.UUID | None
     name: str
     account_type: str
     masked_identifier: str | None

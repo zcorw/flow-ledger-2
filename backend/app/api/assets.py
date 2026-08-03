@@ -196,11 +196,42 @@ def list_accounts(
     ]
 
 
+@router.get("/accounts/unassigned", response_model=list[AccountResponse])
+def list_unassigned_accounts(
+    auth: CurrentAuthDependency, db: DbDependency
+) -> list[AccountResponse]:
+    project_count = (
+        select(func.count(Project.id))
+        .where(Project.account_id == Account.id)
+        .correlate(Account)
+        .scalar_subquery()
+    )
+    rows = db.execute(
+        select(Account, project_count)
+        .where(Account.institution_id.is_(None), Account.user_id == auth.user.id)
+        .order_by(Account.name)
+    )
+    return [
+        AccountResponse(
+            id=item.id,
+            institution_id=None,
+            name=item.name,
+            account_type=item.account_type,
+            masked_identifier=item.masked_identifier,
+            display_color=item.display_color,
+            is_active=item.is_active,
+            project_count=count,
+        )
+        for item, count in rows
+    ]
+
+
 @router.post("/accounts", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
 def create_account(
     payload: AccountPayload, auth: CurrentAuthDependency, db: DbDependency
 ) -> AccountResponse:
-    _institution(db, auth.user.id, payload.institution_id)
+    if payload.institution_id is not None:
+        _institution(db, auth.user.id, payload.institution_id)
     entity = Account(id=uuid.uuid4(), user_id=auth.user.id, **payload.model_dump())
     db.add(entity)
     _commit(
@@ -226,7 +257,8 @@ def update_account(
     db: DbDependency,
 ) -> AccountResponse:
     entity = _account(db, auth.user.id, entity_id)
-    _institution(db, auth.user.id, payload.institution_id)
+    if payload.institution_id is not None:
+        _institution(db, auth.user.id, payload.institution_id)
     before = AccountResponse.model_validate(entity).model_dump(mode="json")
     for key, value in payload.model_dump().items():
         setattr(entity, key, value)

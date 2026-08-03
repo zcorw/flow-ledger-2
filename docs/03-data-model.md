@@ -123,7 +123,7 @@ create table institutions (
 create table accounts (
   id uuid primary key,
   user_id uuid not null references users(id),
-  institution_id uuid not null references institutions(id),
+  institution_id uuid references institutions(id),
   name text not null,
   account_type text not null,
   masked_identifier text,
@@ -133,9 +133,13 @@ create table accounts (
   updated_at timestamptz not null,
   unique (institution_id, name)
 );
+
+create unique index uq_accounts_user_unassigned_name
+  on accounts (user_id, name)
+  where institution_id is null;
 ```
 
-账户类型初始枚举：savings、wealth_management、brokerage、cash_wallet、loan_related、other。
+`institution_id` 为空表示账户尚未关联机构；关联前账户及其项目保留，但不参与月度快照。账户类型初始枚举：savings、wealth_management、brokerage、cash_wallet、loan_related、other。
 
 ### projects
 
@@ -302,4 +306,3 @@ create index idx_fx_rates_currency_date on fx_rates(quote_currency, rate_date);
 create index idx_debt_events_item_date on debt_events(debt_item_id, event_date);
 create index idx_audit_logs_user_created on audit_logs(user_id, created_at desc);
 ```
-
