@@ -307,10 +307,20 @@ API 前缀：`/api/v1`
 `type` 可为：
 
 - institution_account_project
+- fx_rate
 - monthly_snapshot
 - debt_event
 
 下载的 CSV 模板在示例数据后提供以 `#` 开头的可选值参考行，列出各类型、流动性和风险字段允许填写的系统值及中文含义。参考行在校验和导入时自动忽略，可以保留在文件中。
+
+`fx_rate` 模板字段为：
+
+- `rate_date`：汇率来源实际公布日期，格式为 `YYYY-MM-DD`
+- `currency_code`：设置页已启用的非 CNY 币种
+- `rate_to_cny`：1 单位外币可兑换的 CNY 金额，必须大于 0，最多保存 10 位小数
+- `source`：可留空，默认使用 `manual-import`
+
+同一文件内不允许出现重复的“日期 + 币种 + 来源”。数据库中已存在相同唯一键时，提交导入会更新汇率值和抓取时间。
 
 ### POST /imports/{type}/validate
 
@@ -318,7 +328,7 @@ API 前缀：`/api/v1`
 
 ### POST /imports/{type}/commit
 
-提交已校验通过的导入。冲突时整批拒绝。
+提交已校验通过的导入。除历史汇率的同键更新外，冲突时整批拒绝。
 
 ### POST /exports/master-data
 
