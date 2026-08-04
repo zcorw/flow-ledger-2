@@ -4,6 +4,7 @@ import CalendarMonthOutlined from '@mui/icons-material/CalendarMonthOutlined';
 import CloudDownloadOutlined from '@mui/icons-material/CloudDownloadOutlined';
 import DownloadOutlined from '@mui/icons-material/DownloadOutlined';
 import FileUploadOutlined from '@mui/icons-material/FileUploadOutlined';
+import PriceChangeOutlined from '@mui/icons-material/PriceChangeOutlined';
 import ReceiptLongOutlined from '@mui/icons-material/ReceiptLongOutlined';
 import RestoreOutlined from '@mui/icons-material/RestoreOutlined';
 import {
@@ -51,35 +52,48 @@ const importDefinitions: Array<{
   title: string;
   description: string;
   icon: typeof AccountTreeOutlined;
+  exportable: boolean;
 }> = [
   {
     type: 'institution_account_project',
     title: '机构、账户与项目',
     description: '按机构 → 账户 → 项目的顺序批量建立基础资料。',
     icon: AccountTreeOutlined,
+    exportable: true,
+  },
+  {
+    type: 'fx_rate',
+    title: '历史汇率',
+    description: '批量补充或更新指定日期的外币兑 CNY 汇率。',
+    icon: PriceChangeOutlined,
+    exportable: false,
   },
   {
     type: 'monthly_snapshot',
     title: '月度快照',
     description: '按日期导入项目金额、流动性、风险和变动备注。',
     icon: CalendarMonthOutlined,
+    exportable: true,
   },
   {
     type: 'debt_event',
     title: '债权债务事件',
     description: '批量导入新增、还款、调整或结清事件。',
     icon: ReceiptLongOutlined,
+    exportable: true,
   },
 ];
 
+type ExportType = Exclude<ImportType, 'fx_rate'>;
+
 type DataExportRequest = {
-  type: ImportType;
+  type: ExportType;
   dateFrom?: string;
   dateTo?: string;
   debtType?: DebtExportType;
 };
 
-const exportNoticeLabels: Record<ImportType, string> = {
+const exportNoticeLabels: Record<ExportType, string> = {
   institution_account_project: '主数据',
   monthly_snapshot: '月度快照',
   debt_event: '债权债务事件',
@@ -87,6 +101,10 @@ const exportNoticeLabels: Record<ImportType, string> = {
 
 function today() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function isExportType(type: ImportType): type is ExportType {
+  return type !== 'fx_rate';
 }
 
 function monthsAgo(months: number) {
@@ -106,7 +124,7 @@ export function OperationsSettings() {
   const [notice, setNotice] = useState<string>();
   const [backup, setBackup] = useState<BackupMetadata>();
   const [restoreDialog, setRestoreDialog] = useState(false);
-  const [dataExportDialog, setDataExportDialog] = useState<ImportType | null>(null);
+  const [dataExportDialog, setDataExportDialog] = useState<ExportType | null>(null);
   const [exportDateFrom, setExportDateFrom] = useState(() => monthsAgo(12));
   const [exportDateTo, setExportDateTo] = useState(today);
   const [debtExportType, setDebtExportType] = useState<DebtExportType>('all');
@@ -187,7 +205,7 @@ export function OperationsSettings() {
   const handleBackupFile = (file?: File) => {
     if (file) uploadMutation.mutate(file);
   };
-  const openDataExport = (type: ImportType) => {
+  const openDataExport = (type: ExportType) => {
     dataExportMutation.reset();
     if (type === 'institution_account_project') {
       dataExportMutation.mutate({ type });
@@ -219,7 +237,7 @@ export function OperationsSettings() {
           导入、导出与恢复
         </Typography>
         <Typography sx={{ mt: 0.5, color: 'text.secondary', fontSize: 13 }}>
-          集中管理三类业务数据；CSV 导入会先完整校验，导出不会改变现有数据。
+          集中管理四类可导入数据；CSV 导入会先完整校验，导出不会改变现有数据。
         </Typography>
       </Box>
       {error && <Alert severity="error">{operationError(error)}</Alert>}
@@ -234,6 +252,7 @@ export function OperationsSettings() {
           const job = jobs[definition.type];
           const status = importStatus(job);
           const DefinitionIcon = definition.icon;
+          const exportType = isExportType(definition.type) ? definition.type : undefined;
           const templateBusy = templateMutation.isPending
             && templateMutation.variables === definition.type;
           const busy =
@@ -245,7 +264,7 @@ export function OperationsSettings() {
             <Paper
               key={definition.type}
               component="section"
-              aria-label={`${definition.title}导入导出`}
+              aria-label={`${definition.title}${definition.exportable ? '导入导出' : '导入'}`}
               variant="outlined"
               sx={{
                 p: { xs: 1.75, sm: 2 },
@@ -322,7 +341,12 @@ export function OperationsSettings() {
                 <Box
                   sx={{
                     display: 'grid',
-                    gridTemplateColumns: { xs: '1fr 1fr', sm: 'auto auto minmax(112px, auto)' },
+                    gridTemplateColumns: {
+                      xs: definition.exportable ? '1fr 1fr' : 'auto minmax(112px, 1fr)',
+                      sm: definition.exportable
+                        ? 'auto auto minmax(112px, auto)'
+                        : 'auto minmax(112px, auto)',
+                    },
                     gap: 0.75,
                     alignItems: 'center',
                     borderTop: { xs: '1px solid', md: 0 },
@@ -343,18 +367,20 @@ export function OperationsSettings() {
                   >
                     下载模板
                   </Button>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    disabled={busy}
-                    startIcon={busy && dataExportMutation.variables?.type === definition.type
-                      ? <CircularProgress aria-label="正在导出数据" size={15} />
-                      : <CloudDownloadOutlined />}
-                    onClick={() => openDataExport(definition.type)}
-                    sx={{ px: 1, whiteSpace: 'nowrap' }}
-                  >
-                    导出数据
-                  </Button>
+                  {definition.exportable && exportType && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={busy}
+                      startIcon={busy && dataExportMutation.variables?.type === exportType
+                        ? <CircularProgress aria-label="正在导出数据" size={15} />
+                        : <CloudDownloadOutlined />}
+                      onClick={() => openDataExport(exportType)}
+                      sx={{ px: 1, whiteSpace: 'nowrap' }}
+                    >
+                      导出数据
+                    </Button>
+                  )}
                   {job?.status === 'validated' ? (
                     <Button
                       size="small"

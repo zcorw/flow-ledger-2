@@ -1,7 +1,11 @@
 import { apiRequest } from '../../api/client';
 import { blobRequest, saveBlob } from '../../api/download';
 
-export type ImportType = 'institution_account_project' | 'monthly_snapshot' | 'debt_event';
+export type ImportType =
+  | 'institution_account_project'
+  | 'monthly_snapshot'
+  | 'debt_event'
+  | 'fx_rate';
 export type DebtExportType = 'all' | 'receivable' | 'payable';
 
 export type ImportError = {
