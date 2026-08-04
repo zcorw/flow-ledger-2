@@ -226,8 +226,8 @@ export function OperationsSettings() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' },
-          gap: 1.5,
+          gridTemplateColumns: 'minmax(0, 1fr)',
+          gap: 1,
         }}
       >
         {importDefinitions.map((definition) => {
@@ -248,67 +248,148 @@ export function OperationsSettings() {
               aria-label={`${definition.title}导入导出`}
               variant="outlined"
               sx={{
-                p: 2.25,
+                p: { xs: 1.75, sm: 2 },
                 borderRadius: 2.5,
                 borderColor: 'rgba(80, 105, 100, 0.18)',
-                boxShadow: '0 10px 30px rgba(31, 55, 50, 0.035)',
-                display: 'flex',
-                flexDirection: 'column',
+                boxShadow: '0 8px 24px rgba(31, 55, 50, 0.03)',
               }}
             >
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: '42px minmax(0, 1fr) auto',
-                  columnGap: 1.25,
-                  rowGap: 0.5,
+                  gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) auto' },
+                  columnGap: 3,
+                  rowGap: 1.5,
                   alignItems: 'center',
                 }}
               >
                 <Box
                   sx={{
-                    gridRow: '1 / span 2',
-                    width: 42,
-                    height: 42,
-                    borderRadius: 2,
                     display: 'grid',
-                    placeItems: 'center',
-                    bgcolor: 'rgba(39, 138, 115, 0.10)',
-                    color: 'primary.main',
+                    gridTemplateColumns: { xs: '42px minmax(0, 1fr)', sm: '42px minmax(0, 1fr) auto' },
+                    columnGap: 1.25,
+                    rowGap: 0.4,
+                    alignItems: 'center',
                   }}
                 >
-                  <DefinitionIcon fontSize="small" />
+                  <Box
+                    sx={{
+                      gridRow: { xs: '1 / span 3', sm: '1 / span 2' },
+                      width: 42,
+                      height: 42,
+                      borderRadius: 2,
+                      display: 'grid',
+                      placeItems: 'center',
+                      bgcolor: 'rgba(39, 138, 115, 0.10)',
+                      color: 'primary.main',
+                    }}
+                  >
+                    <DefinitionIcon fontSize="small" />
+                  </Box>
+                  <Typography sx={{ minWidth: 0, fontWeight: 750, lineHeight: 1.3 }}>
+                    {definition.title}
+                  </Typography>
+                  <Chip
+                    size="small"
+                    color={status.color}
+                    icon={(
+                      <Box
+                        component="span"
+                        sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'currentColor' }}
+                      />
+                    )}
+                    label={status.label}
+                    sx={{
+                      gridColumn: { xs: '2', sm: '3' },
+                      gridRow: { xs: '2', sm: '1' },
+                      justifySelf: 'start',
+                      flexShrink: 0,
+                      bgcolor: status.color === 'default' ? 'action.hover' : undefined,
+                      '& .MuiChip-icon': { ml: 1 },
+                    }}
+                  />
+                  <Typography
+                    sx={{
+                      gridColumn: { xs: '2', sm: '2 / 4' },
+                      color: 'text.secondary',
+                      fontSize: 12,
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    {definition.description}
+                  </Typography>
                 </Box>
-                <Typography sx={{ minWidth: 0, fontWeight: 750, lineHeight: 1.3 }}>
-                  {definition.title}
-                </Typography>
-                <Chip
-                  size="small"
-                  color={status.color}
-                  icon={(
-                    <Box
-                      component="span"
-                      sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'currentColor' }}
-                    />
-                  )}
-                  label={status.label}
+                <Box
                   sx={{
-                    flexShrink: 0,
-                    bgcolor: status.color === 'default' ? 'action.hover' : undefined,
-                    '& .MuiChip-icon': { ml: 1 },
-                  }}
-                />
-                <Typography
-                  sx={{
-                    gridColumn: '2 / 4',
-                    color: 'text.secondary',
-                    fontSize: 12,
-                    lineHeight: 1.55,
-                    minHeight: 37,
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr 1fr', sm: 'auto auto minmax(112px, auto)' },
+                    gap: 0.75,
+                    alignItems: 'center',
+                    borderTop: { xs: '1px solid', md: 0 },
+                    borderLeft: { xs: 0, md: '1px solid' },
+                    borderColor: 'divider',
+                    pt: { xs: 1.25, md: 0 },
+                    pl: { xs: 0, md: 2.5 },
                   }}
                 >
-                  {definition.description}
-                </Typography>
+                  <Button
+                    size="small"
+                    disabled={busy}
+                    startIcon={templateBusy
+                      ? <CircularProgress aria-label="正在下载模板" size={15} />
+                      : <DownloadOutlined />}
+                    onClick={() => templateMutation.mutate(definition.type)}
+                    sx={{ px: 0.75, whiteSpace: 'nowrap' }}
+                  >
+                    下载模板
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={busy}
+                    startIcon={busy && dataExportMutation.variables?.type === definition.type
+                      ? <CircularProgress aria-label="正在导出数据" size={15} />
+                      : <CloudDownloadOutlined />}
+                    onClick={() => openDataExport(definition.type)}
+                    sx={{ px: 1, whiteSpace: 'nowrap' }}
+                  >
+                    导出数据
+                  </Button>
+                  {job?.status === 'validated' ? (
+                    <Button
+                      size="small"
+                      variant="contained"
+                      disableElevation
+                      disabled={busy}
+                      startIcon={busy ? <CircularProgress aria-label="正在处理导入" size={15} /> : <FileUploadOutlined />}
+                      onClick={() => commitMutation.mutate({ type: definition.type, jobId: job.id })}
+                      sx={{ whiteSpace: 'nowrap', gridColumn: { xs: '1 / -1', sm: 'auto' } }}
+                    >
+                      确认导入
+                    </Button>
+                  ) : (
+                    <Button
+                      component="label"
+                      size="small"
+                      variant="contained"
+                      disableElevation
+                      disabled={busy}
+                      startIcon={busy ? <CircularProgress aria-label="正在处理导入" size={15} /> : <FileUploadOutlined />}
+                      sx={{ whiteSpace: 'nowrap', gridColumn: { xs: '1 / -1', sm: 'auto' } }}
+                    >
+                      选择文件
+                      <input
+                        hidden
+                        type="file"
+                        accept=".csv,text/csv"
+                        onChange={(event) => {
+                          handleImportFile(definition.type, event.currentTarget.files?.[0]);
+                          event.currentTarget.value = '';
+                        }}
+                      />
+                    </Button>
+                  )}
+                </Box>
               </Box>
               {job?.error_report?.length ? (
                 <Alert severity="error" sx={{ mt: 1.5, fontSize: 12 }}>
@@ -320,74 +401,6 @@ export function OperationsSettings() {
                   {job.error_report.length > 3 && `另有 ${job.error_report.length - 3} 项错误`}
                 </Alert>
               ) : null}
-              <Divider sx={{ mt: 'auto', mb: 1.25 }} />
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: 'auto auto minmax(96px, 1fr)',
-                  gap: 0.75,
-                  alignItems: 'center',
-                  '@media (max-width: 480px)': { gridTemplateColumns: '1fr 1fr' },
-                }}
-              >
-                <Button
-                  size="small"
-                  disabled={busy}
-                  startIcon={templateBusy
-                    ? <CircularProgress aria-label="正在下载模板" size={15} />
-                    : <DownloadOutlined />}
-                  onClick={() => templateMutation.mutate(definition.type)}
-                  sx={{ px: 0.75, whiteSpace: 'nowrap' }}
-                >
-                  下载模板
-                </Button>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  disabled={busy}
-                  startIcon={busy && dataExportMutation.variables?.type === definition.type
-                    ? <CircularProgress aria-label="正在导出数据" size={15} />
-                    : <CloudDownloadOutlined />}
-                  onClick={() => openDataExport(definition.type)}
-                  sx={{ px: 1, whiteSpace: 'nowrap' }}
-                >
-                  导出数据
-                </Button>
-                {job?.status === 'validated' ? (
-                  <Button
-                    size="small"
-                    variant="contained"
-                    disableElevation
-                    disabled={busy}
-                    startIcon={busy ? <CircularProgress aria-label="正在处理导入" size={15} /> : <FileUploadOutlined />}
-                    onClick={() => commitMutation.mutate({ type: definition.type, jobId: job.id })}
-                    sx={{ whiteSpace: 'nowrap', '@media (max-width: 480px)': { gridColumn: '1 / -1' } }}
-                  >
-                    确认导入
-                  </Button>
-                ) : (
-                  <Button
-                    component="label"
-                    size="small"
-                    variant="contained"
-                    disableElevation
-                    disabled={busy}
-                    startIcon={busy ? <CircularProgress aria-label="正在处理导入" size={15} /> : <FileUploadOutlined />}
-                    sx={{ whiteSpace: 'nowrap', '@media (max-width: 480px)': { gridColumn: '1 / -1' } }}
-                  >
-                    选择文件
-                    <input
-                      hidden
-                      type="file"
-                      accept=".csv,text/csv"
-                      onChange={(event) => {
-                        handleImportFile(definition.type, event.currentTarget.files?.[0]);
-                        event.currentTarget.value = '';
-                      }}
-                    />
-                  </Button>
-                )}
-              </Box>
             </Paper>
           );
         })}

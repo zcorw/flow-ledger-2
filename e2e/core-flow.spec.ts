@@ -228,6 +228,16 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await expect(masterDataOperations.getByText('未选择文件')).toBeVisible();
   await expect(masterDataOperations.getByRole('button', { name: '下载模板' })).toBeVisible();
   await expect(masterDataOperations.getByRole('button', { name: '选择文件' })).toBeVisible();
+  const [masterDataBox, snapshotBox, debtBox] = await Promise.all([
+    masterDataOperations.boundingBox(),
+    snapshotOperations.boundingBox(),
+    debtOperations.boundingBox(),
+  ]);
+  expect(masterDataBox).not.toBeNull();
+  expect(snapshotBox).not.toBeNull();
+  expect(debtBox).not.toBeNull();
+  expect(snapshotBox!.y).toBeGreaterThan(masterDataBox!.y + masterDataBox!.height);
+  expect(debtBox!.y).toBeGreaterThan(snapshotBox!.y + snapshotBox!.height);
 
   const masterDataDownload = page.waitForEvent('download');
   await masterDataOperations.getByRole('button', { name: '导出数据' }).click();
