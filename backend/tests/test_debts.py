@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
@@ -81,6 +81,33 @@ def test_debt_event_sequence_as_of_dates_and_status(client: TestClient) -> None:
         "repayment",
         "issue",
     ]
+
+
+def test_debt_list_uses_latest_recorded_event_balance(client: TestClient) -> None:
+    bootstrap(client)
+    debt_id = create_debt(client)
+    issue_date = date.today() + timedelta(days=30)
+    repayment_date = issue_date + timedelta(days=1)
+    assert event(client, debt_id, "issue", issue_date.isoformat(), "10000").status_code == 201
+    assert event(
+        client,
+        debt_id,
+        "repayment",
+        repayment_date.isoformat(),
+        "3000",
+    ).status_code == 201
+
+    current = client.get("/api/v1/debts", params={"type": "receivable"}).json()[0]
+    assert current["balance"] == "7000.000000"
+    assert current["last_event_date"] == repayment_date.isoformat()
+    assert current["status"] == "partially_settled"
+
+    historical = client.get(
+        "/api/v1/debts/balances",
+        params={"snapshotDate": date.today().isoformat()},
+    ).json()["items"][0]
+    assert Decimal(historical["balance"]) == 0
+    assert historical["last_event_date"] is None
 
 
 def test_negative_rules_and_currency_conversion(client: TestClient) -> None:

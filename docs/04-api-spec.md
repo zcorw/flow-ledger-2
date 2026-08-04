@@ -263,7 +263,7 @@ API 前缀：`/api/v1`
 
 ### GET /debts?type=receivable
 
-返回债权或债务列表。
+返回债权或债务列表。`balance` 和 `last_event_date` 按最新已录入事件计算，不以服务器当天截断。
 
 ### POST /debts
 

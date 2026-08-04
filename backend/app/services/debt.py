@@ -15,6 +15,11 @@ def event_delta(event_type: str, amount: Decimal) -> Decimal:
     return -amount
 
 
+def _summarize_events(events: list[DebtEvent]) -> tuple[Decimal, date | None]:
+    balance = sum((event_delta(item.event_type, item.amount) for item in events), Decimal("0"))
+    return balance, events[-1].event_date if events else None
+
+
 def debt_balance_at(
     db: Session, debt_item_id: uuid.UUID, snapshot_date: date
 ) -> tuple[Decimal, date | None]:
@@ -28,8 +33,20 @@ def debt_balance_at(
             .order_by(DebtEvent.event_date, DebtEvent.created_at, DebtEvent.id)
         )
     )
-    balance = sum((event_delta(item.event_type, item.amount) for item in events), Decimal("0"))
-    return balance, events[-1].event_date if events else None
+    return _summarize_events(events)
+
+
+def debt_balance_latest(
+    db: Session, debt_item_id: uuid.UUID
+) -> tuple[Decimal, date | None]:
+    events = list(
+        db.scalars(
+            select(DebtEvent)
+            .where(DebtEvent.debt_item_id == debt_item_id)
+            .order_by(DebtEvent.event_date, DebtEvent.created_at, DebtEvent.id)
+        )
+    )
+    return _summarize_events(events)
 
 
 def validate_event_amount(event_type: str, amount: Decimal) -> None:

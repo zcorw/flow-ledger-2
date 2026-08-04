@@ -198,6 +198,32 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await expectNoSeriousAccessibilityIssues(page, 'mobile-dashboard');
 
   await page.setViewportSize({ width: 1280, height: 720 });
+  await page.getByRole('button', { name: '债权债务' }).click();
+  await page.getByRole('button', { name: '新增债权' }).click();
+  const createDebtDialog = page.getByRole('dialog', { name: '新增债权' });
+  await createDebtDialog.getByLabel('交易对手').fill('E2E Future Friend');
+  await createDebtDialog.getByRole('button', { name: '创建' }).click();
+  await expect(createDebtDialog).not.toBeVisible();
+
+  await page.getByRole('button', { name: '添加事件' }).click();
+  let eventDialog = page.getByRole('dialog', { name: '添加事件' });
+  await eventDialog.getByLabel('发生日期').fill('2099-01-01');
+  await eventDialog.getByLabel('金额').fill('10000');
+  await eventDialog.getByRole('button', { name: '保存事件' }).click();
+  await expect(eventDialog).not.toBeVisible();
+
+  await page.getByRole('button', { name: '添加事件' }).click();
+  eventDialog = page.getByRole('dialog', { name: '添加事件' });
+  await eventDialog.getByLabel('事件类型').click();
+  await page.getByRole('option', { name: '还款' }).click();
+  await eventDialog.getByLabel('发生日期').fill('2099-01-02');
+  await eventDialog.getByLabel('金额').fill('3000');
+  await eventDialog.getByRole('button', { name: '保存事件' }).click();
+  await expect(eventDialog).not.toBeVisible();
+  await expect(page.getByText('CNY 7,000.00', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('当前未偿本金 CNY 7,000.00', { exact: true })).toBeVisible();
+  await expect(page.getByText('部分偿还', { exact: true })).toBeVisible();
+
   await page.getByRole('button', { name: '机构与账户' }).click();
   await page.getByRole('button', { name: '编辑机构 E2E Bank' }).click();
   const editInstitutionDialog = page.getByRole('dialog');

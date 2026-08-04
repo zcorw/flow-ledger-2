@@ -13,7 +13,12 @@ from app.core.errors import ApiError
 from app.models.asset import Account, MonthlySnapshot, Project
 from app.models.debt import DebtEvent, DebtItem
 from app.models.institution import Institution
-from app.services.debt import debt_balance_at, event_delta, validate_event_amount
+from app.services.debt import (
+    debt_balance_at,
+    debt_balance_latest,
+    event_delta,
+    validate_event_amount,
+)
 from app.services.fx import enabled_currency_codes, resolve_rate
 
 IMPORT_TYPES = {"institution_account_project", "monthly_snapshot", "debt_event"}
@@ -527,7 +532,7 @@ def _debts(db: Session, user_id: uuid.UUID, rows: list[dict[str, str]]) -> None:
             )
         )
         db.flush()
-        balance, _ = debt_balance_at(db, item.id, date.today())
+        balance, _ = debt_balance_latest(db, item.id)
         item.status = "settled" if balance == 0 else "active"
 
 

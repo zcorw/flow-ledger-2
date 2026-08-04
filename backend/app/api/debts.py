@@ -19,7 +19,12 @@ from app.schemas.debt import (
     DebtEventRequest,
     DebtEventResponse,
 )
-from app.services.debt import debt_balance_at, event_delta, validate_event_amount
+from app.services.debt import (
+    debt_balance_at,
+    debt_balance_latest,
+    event_delta,
+    validate_event_amount,
+)
 from app.services.fx import enabled_currency_codes, resolve_rate
 
 router = APIRouter()
@@ -34,9 +39,14 @@ def _debt(db: Session, user_id: uuid.UUID, entity_id: uuid.UUID) -> DebtItem:
     return item
 
 
-def _balance_response(db: Session, item: DebtItem, snapshot_date: date) -> DebtBalanceResponse:
-    balance, last_event_date = debt_balance_at(db, item.id, snapshot_date)
-    rate = resolve_rate(db, item.currency_code, snapshot_date)
+def _build_balance_response(
+    db: Session,
+    item: DebtItem,
+    balance: Decimal,
+    last_event_date: date | None,
+    rate_date: date,
+) -> DebtBalanceResponse:
+    rate = resolve_rate(db, item.currency_code, rate_date)
     converted = (balance * rate.rate_to_cny).quantize(MONEY_QUANTIZER, rounding=ROUND_HALF_UP)
     return DebtBalanceResponse(
         id=item.id,
@@ -53,6 +63,16 @@ def _balance_response(db: Session, item: DebtItem, snapshot_date: date) -> DebtB
     )
 
 
+def _balance_response_at(db: Session, item: DebtItem, snapshot_date: date) -> DebtBalanceResponse:
+    balance, last_event_date = debt_balance_at(db, item.id, snapshot_date)
+    return _build_balance_response(db, item, balance, last_event_date, snapshot_date)
+
+
+def _latest_balance_response(db: Session, item: DebtItem) -> DebtBalanceResponse:
+    balance, last_event_date = debt_balance_latest(db, item.id)
+    return _build_balance_response(db, item, balance, last_event_date, date.today())
+
+
 @router.get("", response_model=list[DebtBalanceResponse])
 def list_debts(
     auth: CurrentAuthDependency,
@@ -64,7 +84,7 @@ def list_debts(
         .where(DebtItem.user_id == auth.user.id, DebtItem.debt_type == debt_type)
         .order_by(DebtItem.updated_at.desc())
     )
-    return [_balance_response(db, item, date.today()) for item in items]
+    return [_latest_balance_response(db, item) for item in items]
 
 
 @router.post("", response_model=DebtBalanceResponse, status_code=status.HTTP_201_CREATED)
@@ -93,7 +113,7 @@ def create_debt(
         )
     )
     db.commit()
-    return _balance_response(db, item, date.today())
+    return _latest_balance_response(db, item)
 
 
 @router.get("/balances", response_model=DebtBalanceSheetResponse)
@@ -103,7 +123,7 @@ def debt_balances(
     snapshot_date: Annotated[date, Query(alias="snapshotDate")],
 ) -> DebtBalanceSheetResponse:
     items = [
-        _balance_response(db, item, snapshot_date)
+        _balance_response_at(db, item, snapshot_date)
         for item in db.scalars(select(DebtItem).where(DebtItem.user_id == auth.user.id))
     ]
     return DebtBalanceSheetResponse(
@@ -168,7 +188,7 @@ def create_debt_event(
     )
     db.add(event)
     db.flush()
-    current_balance, _ = debt_balance_at(db, item.id, date.today())
+    current_balance, _ = debt_balance_latest(db, item.id)
     if current_balance == 0:
         item.status = "settled"
     elif payload.event_type == "repayment":
