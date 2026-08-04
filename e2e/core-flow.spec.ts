@@ -222,15 +222,21 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
 
   await page.getByRole('button', { name: '设置' }).click();
   await expect(page.getByRole('heading', { level: 1, name: '设置' })).toBeVisible();
+  const masterDataOperations = page.getByRole('region', { name: '机构、账户与项目导入导出' });
+  const snapshotOperations = page.getByRole('region', { name: '月度快照导入导出' });
+  const debtOperations = page.getByRole('region', { name: '债权债务事件导入导出' });
+  await expect(masterDataOperations.getByText('未选择文件')).toBeVisible();
+  await expect(masterDataOperations.getByRole('button', { name: '下载模板' })).toBeVisible();
+  await expect(masterDataOperations.getByRole('button', { name: '选择文件' })).toBeVisible();
 
   const masterDataDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: '导出全部主数据' }).click();
+  await masterDataOperations.getByRole('button', { name: '导出数据' }).click();
   expect((await masterDataDownload).suggestedFilename()).toMatch(
     /^flow-ledger-master-data-\d{4}-\d{2}-\d{2}\.zip$/,
   );
-  await expect(page.getByText('导出全部主数据已完成')).toBeVisible();
+  await expect(page.getByText('主数据已导出')).toBeVisible();
 
-  await page.getByRole('button', { name: '导出快照 CSV' }).click();
+  await snapshotOperations.getByRole('button', { name: '导出数据' }).click();
   const snapshotExportDialog = page.getByRole('dialog', { name: '导出月度快照' });
   await snapshotExportDialog.getByLabel('开始日期').fill('2026-07-01');
   await snapshotExportDialog.getByLabel('结束日期').fill('2026-07-31');
@@ -240,7 +246,7 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
     'flow-ledger-monthly-snapshots-2026-07-01-2026-07-31.csv',
   );
 
-  await page.getByRole('button', { name: '导出事件 CSV' }).click();
+  await debtOperations.getByRole('button', { name: '导出数据' }).click();
   const debtExportDialog = page.getByRole('dialog', { name: '导出债权债务事件' });
   await debtExportDialog.getByLabel('债权债务类型').click();
   await page.getByRole('option', { name: '债权', exact: true }).click();

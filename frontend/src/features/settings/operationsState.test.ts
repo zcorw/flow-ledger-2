@@ -23,7 +23,8 @@ const backup: BackupMetadata = {
 
 describe('operations state', () => {
   it('maps validation and rejection states to clear labels', () => {
-    expect(importStatus(job)).toEqual({ label: '校验通过 · 8 行', color: 'success' });
+    expect(importStatus()).toEqual({ label: '未选择文件', color: 'default' });
+    expect(importStatus(job)).toEqual({ label: '已校验 · 8 行', color: 'success' });
     expect(importStatus({ ...job, status: 'rejected' })).toEqual({
       label: '整批已拒绝',
       color: 'error',
