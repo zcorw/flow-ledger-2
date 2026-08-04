@@ -35,6 +35,7 @@ def test_business_endpoints_require_authentication(client: TestClient) -> None:
         ("GET", "/api/v1/debts?type=receivable"),
         ("GET", "/api/v1/imports/templates/monthly_snapshot"),
         ("GET", "/api/v1/audit-logs"),
+        ("POST", "/api/v1/exports/master-data"),
         ("POST", "/api/v1/backups/export"),
     ]
     for method, path in endpoints:

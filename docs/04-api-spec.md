@@ -320,6 +320,16 @@ API 前缀：`/api/v1`
 
 提交已校验通过的导入。冲突时整批拒绝。
 
+### POST /exports/master-data
+
+导出机构、账户和项目主数据，返回 ZIP 文件：
+
+- `institutions.csv`：机构基础资料、状态和显示颜色
+- `accounts.csv`：账户资料、当前所属机构 ID/名称；待关联账户的机构字段为空
+- `projects.csv`：项目资料、当前所属账户及机构 ID/名称
+
+三个 CSV 均使用带 BOM 的 UTF-8 编码，包含停用数据。导出操作写入审计日志。
+
 ### POST /backups/export
 
 导出完整备份。

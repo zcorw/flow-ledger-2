@@ -34,6 +34,7 @@ from app.services.imports import (
     template_csv,
     validate_rows,
 )
+from app.services.master_data_export import build_master_data_export
 
 router = APIRouter()
 DbDependency = Annotated[Session, Depends(get_db)]
@@ -165,6 +166,31 @@ def export_backup(auth: CurrentAuthDependency, db: DbDependency) -> Response:
             "Content-Disposition": f'attachment; filename="{item.file_name}"',
             "X-Backup-Id": str(item.id),
             "X-Backup-Checksum": item.checksum,
+        },
+    )
+
+
+@router.post("/exports/master-data")
+def export_master_data(auth: CurrentAuthDependency, db: DbDependency) -> Response:
+    exported = build_master_data_export(db, auth.user.id)
+    db.add(
+        AuditLog(
+            user_id=auth.user.id,
+            action="master_data.export",
+            entity_type="master_data",
+            after_data={
+                "institutionCount": exported.institution_count,
+                "accountCount": exported.account_count,
+                "projectCount": exported.project_count,
+            },
+        )
+    )
+    db.commit()
+    return Response(
+        content=exported.content,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="flow-ledger-master-data.zip"',
         },
     )
 

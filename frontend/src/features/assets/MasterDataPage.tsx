@@ -3,13 +3,14 @@ import AddOutlined from '@mui/icons-material/AddOutlined';
 import BlockOutlined from '@mui/icons-material/BlockOutlined';
 import CheckOutlined from '@mui/icons-material/CheckOutlined';
 import DeleteOutlineOutlined from '@mui/icons-material/DeleteOutlineOutlined';
+import DownloadOutlined from '@mui/icons-material/DownloadOutlined';
 import EditOutlined from '@mui/icons-material/EditOutlined';
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined';
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined';
 import LinkOffOutlined from '@mui/icons-material/LinkOffOutlined';
 import WalletOutlined from '@mui/icons-material/WalletOutlined';
 import {
-  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
+  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
   FormControl, FormControlLabel, FormHelperText, FormLabel, IconButton, List,
   ListItem, ListItemButton, MenuItem, Paper, Snackbar, Stack, Switch, TextField,
   Typography,
@@ -21,7 +22,7 @@ import { ApiClientError } from '../../api/client';
 import { getCurrencies } from '../settings/api';
 import {
   createAccount, createInstitution, createProject, deactivateProject, deleteAccount,
-  deleteInstitution, deleteProject, getAccounts, getInstitutions, getProjects,
+  deleteInstitution, deleteProject, exportMasterData, getAccounts, getInstitutions, getProjects,
   getUnassignedAccounts, updateAccount, updateInstitution, updateProject,
   type Account, type Institution, type Project,
 } from './api';
@@ -186,6 +187,10 @@ export function MasterDataPage() {
       setNotice(`${entityLabels[target.kind]}已删除`);
     },
   });
+  const exportMutation = useMutation({
+    mutationFn: exportMasterData,
+    onSuccess: () => setNotice('机构、账户和项目数据已导出'),
+  });
 
   const openInstitution = (item?: Institution) => setEditor({ kind: 'institution', id: item?.id, values: { name: item?.name ?? '', type: item?.institution_type ?? 'bank', color: normalizeDisplayColor(item?.display_color, '#2f7d6d'), active: item?.is_active ?? true } });
   const openAccount = (item?: Account) => setEditor({ kind: 'account', id: item?.id, values: { parent: item ? (item.institution_id ?? '') : (isUnassigned ? '' : institutionId), name: item?.name ?? '', type: item?.account_type ?? (institutions.find((entry) => entry.id === institutionId)?.institution_type === 'cash' ? 'cash_wallet' : 'savings'), identifier: item?.masked_identifier ?? '', color: normalizeDisplayColor(item?.display_color, '#40514d'), active: item?.is_active ?? true } });
@@ -194,12 +199,12 @@ export function MasterDataPage() {
   const openDelete = (target: NonNullable<DeleteTarget>) => { deleteMutation.reset(); setDeleteTarget(target); };
   const closeDelete = () => { if (!deleteMutation.isPending) { deleteMutation.reset(); setDeleteTarget(null); } };
   const setValue = (key: string, value: string | boolean) => setEditor((current) => current ? { ...current, values: { ...current.values, [key]: value } } : current);
-  const error = saveMutation.error ?? institutionsQuery.error ?? accountsQuery.error ?? unassignedAccountsQuery.error ?? projectsQuery.error;
+  const error = saveMutation.error ?? exportMutation.error ?? institutionsQuery.error ?? accountsQuery.error ?? unassignedAccountsQuery.error ?? projectsQuery.error;
   const errorMessage = error instanceof ApiClientError || error instanceof Error ? error.message : null;
   const deleteErrorMessage = deleteMutation.error instanceof ApiClientError || deleteMutation.error instanceof Error ? deleteMutation.error.message : null;
 
   return <Box>
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', mb: 3 }}><Box><Typography variant="h4" sx={{ fontWeight: 780 }}>机构与账户</Typography><Typography color="text.secondary" sx={{ mt: 0.5 }}>按机构、账户和项目整理资产；账户仅保存脱敏标识。</Typography></Box><Chip icon={<WalletOutlined />} label="现金使用显式钱包维护" color="primary" variant="outlined" /></Stack>
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'flex-start' }, mb: 3 }}><Box><Typography variant="h4" sx={{ fontWeight: 780 }}>机构与账户</Typography><Typography color="text.secondary" sx={{ mt: 0.5 }}>按机构、账户和项目整理资产；账户仅保存脱敏标识。</Typography></Box><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}><Button variant="outlined" startIcon={exportMutation.isPending ? <CircularProgress size={16} aria-label="正在导出主数据" /> : <DownloadOutlined />} onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}>导出主数据</Button><Chip icon={<WalletOutlined />} label="现金使用显式钱包维护" color="primary" variant="outlined" /></Stack></Stack>
     {errorMessage && <Alert severity="error" sx={{ mb: 2 }}>{errorMessage}</Alert>}
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '0.85fr 1fr 1.25fr' }, gap: 2, alignItems: 'start' }}>
       <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}><PanelHeader title="机构" subtitle={`${institutions.length} 个机构`} onAdd={() => openInstitution()} /><List disablePadding><ListItem disablePadding><ListItemButton selected={isUnassigned} onClick={() => { setSelectedInstitution(UNASSIGNED_INSTITUTION_ID); setSelectedAccount(''); }} sx={{ py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}><Box sx={{ width: 34, height: 34, borderRadius: 1.5, display: 'grid', placeItems: 'center', bgcolor: 'action.selected', color: 'text.secondary', mr: 1.5 }}><LinkOffOutlined fontSize="small" /></Box><Box sx={{ flex: 1, minWidth: 0 }}><Typography noWrap sx={{ fontSize: 13, fontWeight: 700 }}>待关联账户</Typography><Typography color="text.secondary" sx={{ fontSize: 11 }}>{unassignedAccounts.length} 个账户 · 关联机构后进入快照</Typography></Box></ListItemButton></ListItem>{institutions.map((item) => <ListItem key={item.id} disablePadding secondaryAction={<Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>{!item.is_active && <Chip label="停用" size="small" />}<IconButton aria-label={`编辑机构 ${item.name}`} size="small" onClick={() => openInstitution(item)}><EditOutlined fontSize="small" /></IconButton><IconButton aria-label={`查看机构历史 ${item.name}`} size="small" onClick={() => openHistory('institution', item.id)}><HistoryOutlined fontSize="small" /></IconButton><IconButton aria-label={`删除机构 ${item.name}`} color="error" size="small" onClick={() => openDelete({ kind: 'institution', id: item.id, name: item.name })}><DeleteOutlineOutlined fontSize="small" /></IconButton></Stack>}><ListItemButton selected={item.id === institutionId} onClick={() => { setSelectedInstitution(item.id); setSelectedAccount(''); }} sx={{ py: 1.5, pr: item.is_active ? 17 : 22, borderBottom: '1px solid', borderColor: 'divider' }}><Box sx={{ width: 34, height: 34, borderRadius: 1.5, display: 'grid', placeItems: 'center', bgcolor: item.display_color ?? '#dceae6', color: 'white', mr: 1.5 }}><AccountBalanceOutlined fontSize="small" /></Box><Box sx={{ flex: 1, minWidth: 0 }}><Typography noWrap sx={{ fontSize: 13, fontWeight: 700 }}>{item.name}</Typography><Typography color="text.secondary" sx={{ fontSize: 11 }}>{item.account_count} 个账户 · {item.project_count} 个项目</Typography></Box></ListItemButton></ListItem>)}</List></Paper>

@@ -1,5 +1,8 @@
+import csv
+import io
 import json
 import uuid
+import zipfile
 
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -201,6 +204,103 @@ def test_conflict_after_validation_rejects_whole_batch(client: TestClient) -> No
     names = {item["name"] for item in client.get("/api/v1/institutions").json()}
     assert "Atomic First" not in names
     assert "Atomic Conflict" in names
+
+
+def test_master_data_export_contains_hierarchy_and_unassigned_accounts(
+    client: TestClient,
+) -> None:
+    assert client.post("/api/v1/exports/master-data").status_code == 401
+    bootstrap(client)
+    institution = client.post(
+        "/api/v1/institutions",
+        json={
+            "name": "Export Bank",
+            "institutionType": "bank",
+            "displayColor": "#397c93",
+            "isActive": True,
+        },
+    ).json()
+    account = client.post(
+        "/api/v1/accounts",
+        json={
+            "institutionId": institution["id"],
+            "name": "Export Account",
+            "accountType": "savings",
+            "maskedIdentifier": "尾号 1357",
+            "displayColor": "#66558c",
+            "isActive": True,
+        },
+    ).json()
+    project = client.post(
+        "/api/v1/projects",
+        json={
+            "accountId": account["id"],
+            "name": "Export Project",
+            "assetType": "bank_deposit",
+            "currencyCode": "CNY",
+            "defaultLiquidityLevel": "t0",
+            "defaultRiskLevel": "low",
+            "notes": "用于导出测试",
+            "isActive": True,
+        },
+    ).json()
+    unassigned = client.post(
+        "/api/v1/accounts",
+        json={
+            "institutionId": None,
+            "name": "Later Account",
+            "accountType": "other",
+            "maskedIdentifier": "待关联",
+            "isActive": False,
+        },
+    ).json()
+
+    response = client.post("/api/v1/exports/master-data")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    assert "flow-ledger-master-data.zip" in response.headers["content-disposition"]
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        assert set(archive.namelist()) == {
+            "institutions.csv",
+            "accounts.csv",
+            "projects.csv",
+        }
+        for name in archive.namelist():
+            assert archive.read(name).startswith(b"\xef\xbb\xbf")
+        institutions = list(
+            csv.DictReader(io.StringIO(archive.read("institutions.csv").decode("utf-8-sig")))
+        )
+        accounts = list(
+            csv.DictReader(io.StringIO(archive.read("accounts.csv").decode("utf-8-sig")))
+        )
+        projects = list(
+            csv.DictReader(io.StringIO(archive.read("projects.csv").decode("utf-8-sig")))
+        )
+
+    institution_row = next(
+        item for item in institutions if item["institution_id"] == institution["id"]
+    )
+    assert institution_row["display_color"] == "#397c93"
+    account_row = next(item for item in accounts if item["account_id"] == account["id"])
+    assert account_row["institution_id"] == institution["id"]
+    assert account_row["institution_name"] == "Export Bank"
+    unassigned_row = next(item for item in accounts if item["account_id"] == unassigned["id"])
+    assert unassigned_row["institution_id"] == ""
+    assert unassigned_row["institution_name"] == ""
+    assert unassigned_row["is_active"] == "false"
+    project_row = next(item for item in projects if item["project_id"] == project["id"])
+    assert project_row["account_id"] == account["id"]
+    assert project_row["institution_id"] == institution["id"]
+    assert project_row["notes"] == "用于导出测试"
+
+    with get_session_factory()() as db:
+        export_log = db.scalar(
+            select(AuditLog)
+            .where(AuditLog.action == "master_data.export")
+            .order_by(AuditLog.created_at.desc())
+        )
+        assert export_log is not None
+        assert export_log.after_data["accountCount"] >= 2
 
 
 def test_backup_restore_reauthentication_prebackup_and_consistency(

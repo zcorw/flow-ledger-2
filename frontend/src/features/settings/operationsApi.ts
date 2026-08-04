@@ -1,4 +1,5 @@
-import { API_BASE_URL, ApiClientError, apiRequest } from '../../api/client';
+import { apiRequest } from '../../api/client';
+import { blobRequest, saveBlob } from '../../api/download';
 
 export type ImportType = 'institution_account_project' | 'monthly_snapshot' | 'debt_event';
 
@@ -31,32 +32,6 @@ export type RestoreResult = {
   restored_from_id: string;
   pre_restore_backup_id: string;
 };
-
-async function blobRequest(path: string, init: RequestInit = {}): Promise<Blob> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    credentials: 'include',
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new ApiClientError(
-      response.status,
-      body.error?.code ?? 'REQUEST_FAILED',
-      body.error?.message ?? '下载失败，请稍后重试',
-      body.error?.details ?? [],
-    );
-  }
-  return response.blob();
-}
-
-export function saveBlob(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
 
 export async function downloadImportTemplate(importType: ImportType): Promise<void> {
   const blob = await blobRequest(`/imports/templates/${importType}`);

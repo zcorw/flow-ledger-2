@@ -114,6 +114,12 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await page.getByRole('dialog').getByRole('button', { name: '保存' }).click();
   await expect(page.getByText('E2E Balance', { exact: true })).toBeVisible();
   await expect(page.getByRole('dialog')).not.toBeVisible();
+  const masterDataDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出主数据' }).click();
+  expect((await masterDataDownload).suggestedFilename()).toMatch(
+    /^flow-ledger-master-data-\d{4}-\d{2}-\d{2}\.zip$/,
+  );
+  await expect(page.getByText('机构、账户和项目数据已导出')).toBeVisible();
   await expectNoSeriousAccessibilityIssues(page, 'master-data');
 
   await page.getByRole('button', { name: '月度快照' }).click();
