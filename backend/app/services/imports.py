@@ -9,9 +9,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.models.asset import Account, MonthlySnapshot, Project
+from app.models.common import utc_now
 from app.models.debt import DebtEvent, DebtItem
+from app.models.fx import FxRate
 from app.models.institution import Institution
 from app.services.debt import (
     debt_balance_at,
@@ -19,9 +22,9 @@ from app.services.debt import (
     event_delta,
     validate_event_amount,
 )
-from app.services.fx import enabled_currency_codes, resolve_rate
+from app.services.fx import RATE_QUANTIZER, enabled_currency_codes, resolve_rate
 
-IMPORT_TYPES = {"institution_account_project", "monthly_snapshot", "debt_event"}
+IMPORT_TYPES = {"institution_account_project", "monthly_snapshot", "debt_event", "fx_rate"}
 HEADERS = {
     "institution_account_project": [
         "record_type",
@@ -55,6 +58,12 @@ HEADERS = {
         "event_date",
         "amount",
         "note",
+    ],
+    "fx_rate": [
+        "rate_date",
+        "currency_code",
+        "rate_to_cny",
+        "source",
     ],
 }
 EXAMPLES = {
@@ -104,6 +113,7 @@ EXAMPLES = {
     "debt_event": [
         ["receivable", "朋友 A", "CNY", "issue", "2026-07-01", "50000.00", "新增借出款"]
     ],
+    "fx_rate": [["2026-07-31", "USD", "7.2000000000", "manual-import"]],
 }
 INSTITUTION_TYPES = {"bank", "broker", "cash", "person", "other"}
 ACCOUNT_TYPES = {
@@ -153,6 +163,16 @@ REFERENCE_ROWS = {
         (
             "# event_type（事件类型）：issue（新增） | repayment（还款） | "
             "adjustment（调整） | settle（结清）"
+        ),
+    ],
+    "fx_rate": [
+        "# 参考说明：以下以 # 开头的行仅提供填写规则，导入时会自动忽略，可以保留",
+        "# rate_date（汇率日期）：YYYY-MM-DD；建议使用来源实际公布的日期",
+        "# currency_code（币种）：必须是设置页已启用的非 CNY 币种，例如 USD、HKD、JPY",
+        "# rate_to_cny（对 CNY 汇率）：1 单位外币可兑换的 CNY 金额，必须大于 0，最多保留 10 位小数",
+        (
+            "# source（来源）：可留空，系统将使用 manual-import；"
+            "同币种、日期、来源再次导入会更新原记录"
         ),
     ],
 }
@@ -381,6 +401,42 @@ def _validate_debts(rows: list[dict[str, str]], currencies: set[str]) -> list[di
     return errors
 
 
+def _validate_fx_rates(
+    rows: list[dict[str, str]], currencies: set[str]
+) -> list[dict[str, Any]]:
+    errors: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for index, row in enumerate(rows, 2):
+        rate_date = row["rate_date"]
+        currency_code = row["currency_code"].upper()
+        source = row["source"] or "manual-import"
+        try:
+            date.fromisoformat(rate_date)
+        except ValueError:
+            _error(errors, index, "rate_date", "日期格式必须为 YYYY-MM-DD")
+        if currency_code == get_settings().base_currency:
+            _error(errors, index, "currency_code", "基础币种 CNY 不需要导入汇率")
+        elif currency_code not in currencies:
+            _error(errors, index, "currency_code", "币种未启用")
+        try:
+            rate = Decimal(row["rate_to_cny"])
+            if not rate.is_finite() or rate <= 0:
+                _error(errors, index, "rate_to_cny", "汇率必须是大于 0 的数字")
+            elif rate >= Decimal("10000000000"):
+                _error(errors, index, "rate_to_cny", "汇率整数部分不能超过 10 位")
+            else:
+                rate.quantize(RATE_QUANTIZER, rounding=ROUND_HALF_UP)
+        except InvalidOperation:
+            _error(errors, index, "rate_to_cny", "汇率必须是有效数字")
+        if len(source) > 100:
+            _error(errors, index, "source", "来源不能超过 100 个字符")
+        key = (rate_date, currency_code, source)
+        if key in seen:
+            _error(errors, index, "currency_code", "同一日期、币种和来源在文件内重复")
+        seen.add(key)
+    return errors
+
+
 def validate_rows(
     db: Session, user_id: uuid.UUID, import_type: str, rows: list[dict[str, str]]
 ) -> list[dict[str, Any]]:
@@ -389,7 +445,9 @@ def validate_rows(
         return _validate_hierarchy(db, user_id, rows, currencies)
     if import_type == "monthly_snapshot":
         return _validate_snapshots(db, user_id, rows)
-    return _validate_debts(rows, currencies)
+    if import_type == "debt_event":
+        return _validate_debts(rows, currencies)
+    return _validate_fx_rates(rows, currencies)
 
 
 def _hierarchy(db: Session, user_id: uuid.UUID, rows: list[dict[str, str]]) -> None:
@@ -536,6 +594,38 @@ def _debts(db: Session, user_id: uuid.UUID, rows: list[dict[str, str]]) -> None:
         item.status = "settled" if balance == 0 else "active"
 
 
+def _fx_rates(db: Session, rows: list[dict[str, str]]) -> None:
+    settings = get_settings()
+    for row in rows:
+        rate_date = date.fromisoformat(row["rate_date"])
+        currency_code = row["currency_code"].upper()
+        source = row["source"] or "manual-import"
+        rate = Decimal(row["rate_to_cny"]).quantize(
+            RATE_QUANTIZER, rounding=ROUND_HALF_UP
+        )
+        existing = db.scalar(
+            select(FxRate).where(
+                FxRate.base_currency == settings.base_currency,
+                FxRate.quote_currency == currency_code,
+                FxRate.rate_date == rate_date,
+                FxRate.source == source,
+            )
+        )
+        if existing:
+            existing.rate_to_base = rate
+            existing.fetched_at = utc_now()
+        else:
+            db.add(
+                FxRate(
+                    base_currency=settings.base_currency,
+                    quote_currency=currency_code,
+                    rate_date=rate_date,
+                    rate_to_base=rate,
+                    source=source,
+                )
+            )
+
+
 def commit_rows(
     db: Session, user_id: uuid.UUID, import_type: str, rows: list[dict[str, str]]
 ) -> None:
@@ -543,5 +633,7 @@ def commit_rows(
         _hierarchy(db, user_id, rows)
     elif import_type == "monthly_snapshot":
         _snapshots(db, user_id, rows)
-    else:
+    elif import_type == "debt_event":
         _debts(db, user_id, rows)
+    else:
+        _fx_rates(db, rows)

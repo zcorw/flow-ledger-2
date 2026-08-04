@@ -3,12 +3,14 @@ import io
 import json
 import uuid
 import zipfile
+from datetime import date
 
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.db.session import get_session_factory
 from app.models.audit import AuditLog
+from app.models.fx import FxRate
 from app.models.operations import BackupExport
 from app.services.imports import EXAMPLES, parse_csv
 
@@ -85,7 +87,7 @@ def hierarchy_csv(bank: str = "Imported Bank") -> str:
     )
 
 
-def test_three_import_types_and_error_reports(client: TestClient) -> None:
+def test_four_import_types_and_error_reports(client: TestClient) -> None:
     assert client.get("/api/v1/imports/templates/monthly_snapshot").status_code == 401
     bootstrap(client)
     expected_references = {
@@ -97,6 +99,7 @@ def test_three_import_types_and_error_reports(client: TestClient) -> None:
         ],
         "monthly_snapshot": ["liquidity_level（流动性）", "risk_level（风险等级）"],
         "debt_event": ["debt_type（债权债务类型）", "event_type（事件类型）"],
+        "fx_rate": ["rate_date（汇率日期）", "rate_to_cny（对 CNY 汇率）"],
     }
     for import_type, references in expected_references.items():
         template = client.get(f"/api/v1/imports/templates/{import_type}")
@@ -156,6 +159,81 @@ def test_three_import_types_and_error_reports(client: TestClient) -> None:
     balances = client.get("/api/v1/debts/balances", params={"snapshotDate": "2026-07-31"}).json()
     debt = next(row for row in balances["items"] if row["counterparty"] == "Imported Friend")
     assert debt["balance"] == "5000.000000"
+
+
+def test_fx_rate_import_validates_and_upserts(client: TestClient) -> None:
+    bootstrap(client)
+    content = "\n".join(
+        [
+            "rate_date,currency_code,rate_to_cny,source",
+            "2024-10-16,USD,7.12345678904,manual-import",
+            "2025-04-16,JPY,0.0485500000,",
+        ]
+    )
+    job = csv_upload(client, "fx_rate", content)
+    assert job.status_code == 200
+    assert job.json()["status"] == "validated"
+    imported = commit(client, "fx_rate", job.json()["id"])
+    assert imported.status_code == 200
+    assert imported.json()["status"] == "committed"
+
+    with get_session_factory()() as db:
+        usd = db.scalar(
+            select(FxRate).where(
+                FxRate.quote_currency == "USD",
+                FxRate.rate_date == date(2024, 10, 16),
+                FxRate.source == "manual-import",
+            )
+        )
+        assert usd is not None
+        assert str(usd.rate_to_base) == "7.1234567890"
+
+    update = csv_upload(
+        client,
+        "fx_rate",
+        "\n".join(
+            [
+                "rate_date,currency_code,rate_to_cny,source",
+                "2024-10-16,usd,7.2000000000,manual-import",
+            ]
+        ),
+    )
+    assert update.json()["status"] == "validated"
+    assert commit(client, "fx_rate", update.json()["id"]).status_code == 200
+
+    with get_session_factory()() as db:
+        rows = list(
+            db.scalars(
+                select(FxRate).where(
+                    FxRate.quote_currency == "USD",
+                    FxRate.rate_date == date(2024, 10, 16),
+                    FxRate.source == "manual-import",
+                )
+            )
+        )
+        assert len(rows) == 1
+        assert str(rows[0].rate_to_base) == "7.2000000000"
+
+    invalid = csv_upload(
+        client,
+        "fx_rate",
+        "\n".join(
+            [
+                "rate_date,currency_code,rate_to_cny,source",
+                "not-a-date,USD,0,manual-import",
+                "2026-07-31,CNY,1,manual-import",
+                "2026-07-31,USD,7.1,manual-import",
+                "2026-07-31,usd,7.2,manual-import",
+            ]
+        ),
+    )
+    assert invalid.json()["status"] == "invalid"
+    error_fields = {item["field"] for item in invalid.json()["error_report"]}
+    assert {"rate_date", "rate_to_cny", "currency_code"} <= error_fields
+    assert any(
+        item["reason"] == "同一日期、币种和来源在文件内重复"
+        for item in invalid.json()["error_report"]
+    )
 
 
 def test_conflict_after_validation_rejects_whole_batch(client: TestClient) -> None:
