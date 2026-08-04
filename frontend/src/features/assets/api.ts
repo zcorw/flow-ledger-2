@@ -1,5 +1,4 @@
 import { apiRequest } from '../../api/client';
-import { blobRequest, saveBlob } from '../../api/download';
 
 export type Institution = {
   id: string; name: string; institution_type: string; display_color: string | null;
@@ -32,9 +31,3 @@ export const createProject = (value: ProjectInput) => apiRequest<Project>('/proj
 export const updateProject = (id: string, value: ProjectInput) => apiRequest<Project>(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(value) });
 export const deleteProject = (id: string) => apiRequest<void>(`/projects/${id}`, { method: 'DELETE' });
 export const deactivateProject = (id: string) => apiRequest<Project>(`/projects/${id}/deactivate`, { method: 'POST' });
-
-export async function exportMasterData(): Promise<void> {
-  const blob = await blobRequest('/exports/master-data', { method: 'POST' });
-  const date = new Date().toISOString().slice(0, 10);
-  saveBlob(blob, `flow-ledger-master-data-${date}.zip`);
-}

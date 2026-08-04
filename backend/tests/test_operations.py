@@ -303,6 +303,88 @@ def test_master_data_export_contains_hierarchy_and_unassigned_accounts(
         assert export_log.after_data["accountCount"] >= 2
 
 
+def test_snapshot_and_debt_exports_apply_filters_and_write_audit_logs(
+    client: TestClient,
+) -> None:
+    bootstrap(client)
+    hierarchy = csv_upload(client, "institution_account_project", hierarchy_csv())
+    assert commit(client, "institution_account_project", hierarchy.json()["id"]).status_code == 200
+    snapshots = "\n".join(
+        [
+            "snapshot_date,institution_name,account_name,project_name,original_amount,"
+            "liquidity_level,risk_level,change_note",
+            "2026-07-31,Imported Bank,Imported Account,Imported Project,100,t0,low,July",
+            "2026-08-31,Imported Bank,Imported Account,Imported Project,200,t0,low,August",
+        ]
+    )
+    snapshot_job = csv_upload(client, "monthly_snapshot", snapshots)
+    assert commit(client, "monthly_snapshot", snapshot_job.json()["id"]).status_code == 200
+    debts = "\n".join(
+        [
+            "debt_type,counterparty,currency_code,event_type,event_date,amount,note",
+            "receivable,Export Friend,CNY,issue,2026-07-15,500,Receivable",
+            "payable,Export Vendor,CNY,issue,2026-08-15,300,Payable",
+        ]
+    )
+    debt_job = csv_upload(client, "debt_event", debts)
+    assert commit(client, "debt_event", debt_job.json()["id"]).status_code == 200
+
+    snapshot_export = client.post(
+        "/api/v1/exports/monthly-snapshots",
+        params={"dateFrom": "2026-07-01", "dateTo": "2026-07-31"},
+    )
+    assert snapshot_export.status_code == 200
+    assert snapshot_export.content.startswith(b"\xef\xbb\xbf")
+    snapshot_rows = list(
+        csv.DictReader(io.StringIO(snapshot_export.content.decode("utf-8-sig")))
+    )
+    assert len(snapshot_rows) == 1
+    assert snapshot_rows[0]["snapshot_date"] == "2026-07-31"
+    assert snapshot_rows[0]["institution_name"] == "Imported Bank"
+    assert snapshot_rows[0]["account_name"] == "Imported Account"
+    assert snapshot_rows[0]["project_name"] == "Imported Project"
+    assert snapshot_rows[0]["change_note"] == "July"
+
+    debt_export = client.post(
+        "/api/v1/exports/debt-events",
+        params={
+            "type": "receivable",
+            "dateFrom": "2026-07-01",
+            "dateTo": "2026-07-31",
+        },
+    )
+    assert debt_export.status_code == 200
+    assert debt_export.content.startswith(b"\xef\xbb\xbf")
+    debt_rows = list(csv.DictReader(io.StringIO(debt_export.content.decode("utf-8-sig"))))
+    assert len(debt_rows) == 1
+    assert debt_rows[0]["debt_type"] == "receivable"
+    assert debt_rows[0]["item_counterparty"] == "Export Friend"
+    assert debt_rows[0]["event_date"] == "2026-07-15"
+    assert debt_rows[0]["note"] == "Receivable"
+
+    invalid_range = client.post(
+        "/api/v1/exports/monthly-snapshots",
+        params={"dateFrom": "2026-08-01", "dateTo": "2026-07-01"},
+    )
+    assert invalid_range.status_code == 400
+    assert invalid_range.json()["error"]["code"] == "INVALID_DATE_RANGE"
+    invalid_type = client.post(
+        "/api/v1/exports/debt-events",
+        params={"type": "invalid"},
+    )
+    assert invalid_type.status_code == 422
+
+    with get_session_factory()() as db:
+        actions = set(
+            db.scalars(
+                select(AuditLog.action).where(
+                    AuditLog.action.in_(["monthly_snapshot.export", "debt_event.export"])
+                )
+            )
+        )
+        assert actions == {"monthly_snapshot.export", "debt_event.export"}
+
+
 def test_backup_restore_reauthentication_prebackup_and_consistency(
     client: TestClient,
 ) -> None:

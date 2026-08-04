@@ -1,8 +1,9 @@
 import json
 import uuid
+from datetime import date
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -35,6 +36,7 @@ from app.services.imports import (
     validate_rows,
 )
 from app.services.master_data_export import build_master_data_export
+from app.services.record_export import build_debt_event_export, build_monthly_snapshot_export
 
 router = APIRouter()
 DbDependency = Annotated[Session, Depends(get_db)]
@@ -191,6 +193,84 @@ def export_master_data(auth: CurrentAuthDependency, db: DbDependency) -> Respons
         media_type="application/zip",
         headers={
             "Content-Disposition": 'attachment; filename="flow-ledger-master-data.zip"',
+        },
+    )
+
+
+def _validate_export_range(date_from: date | None, date_to: date | None) -> None:
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise ApiError(400, "INVALID_DATE_RANGE", "开始日期不能晚于结束日期")
+
+
+@router.post("/exports/monthly-snapshots")
+def export_monthly_snapshots(
+    auth: CurrentAuthDependency,
+    db: DbDependency,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+) -> Response:
+    _validate_export_range(date_from, date_to)
+    exported = build_monthly_snapshot_export(db, auth.user.id, date_from, date_to)
+    db.add(
+        AuditLog(
+            user_id=auth.user.id,
+            action="monthly_snapshot.export",
+            entity_type="monthly_snapshot",
+            after_data={
+                "dateFrom": date_from.isoformat() if date_from else None,
+                "dateTo": date_to.isoformat() if date_to else None,
+                "rowCount": exported.row_count,
+            },
+        )
+    )
+    db.commit()
+    return Response(
+        content=exported.content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="flow-ledger-monthly-snapshots.csv"',
+        },
+    )
+
+
+@router.post("/exports/debt-events")
+def export_debt_events(
+    auth: CurrentAuthDependency,
+    db: DbDependency,
+    debt_type: Annotated[
+        str | None,
+        Query(alias="type", pattern="^(receivable|payable)$"),
+    ] = None,
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+) -> Response:
+    _validate_export_range(date_from, date_to)
+    exported = build_debt_event_export(
+        db,
+        auth.user.id,
+        debt_type,
+        date_from,
+        date_to,
+    )
+    db.add(
+        AuditLog(
+            user_id=auth.user.id,
+            action="debt_event.export",
+            entity_type="debt_event",
+            after_data={
+                "type": debt_type,
+                "dateFrom": date_from.isoformat() if date_from else None,
+                "dateTo": date_to.isoformat() if date_to else None,
+                "rowCount": exported.row_count,
+            },
+        )
+    )
+    db.commit()
+    return Response(
+        content=exported.content,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="flow-ledger-debt-events.csv"',
         },
     )
 

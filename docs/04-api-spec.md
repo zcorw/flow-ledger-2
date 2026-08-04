@@ -330,6 +330,19 @@ API 前缀：`/api/v1`
 
 三个 CSV 均使用带 BOM 的 UTF-8 编码，包含停用数据。导出操作写入审计日志。
 
+### POST /exports/monthly-snapshots
+
+按可选的 `dateFrom`、`dateTo` 日期范围导出月度快照 CSV。日期边界均包含，层级字段按当前机构和账户关联输出，停用数据不排除。
+
+### POST /exports/debt-events
+
+导出债权债务事件 CSV，可选参数：
+
+- `type`：`receivable` 或 `payable`，不传表示全部
+- `dateFrom`、`dateTo`：包含边界的事件日期范围
+
+两个接口均返回带 BOM 的 UTF-8 CSV，并记录筛选条件、导出行数和审计日志。
+
 ### POST /backups/export
 
 导出完整备份。

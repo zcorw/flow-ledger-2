@@ -24,7 +24,7 @@ def _timestamp(value: datetime) -> str:
     return value.isoformat()
 
 
-def _csv_bytes(headers: list[str], rows: list[list[object]]) -> bytes:
+def csv_bytes(headers: list[str], rows: list[list[object]]) -> bytes:
     output = io.StringIO(newline="")
     writer = csv.writer(output, lineterminator="\r\n")
     writer.writerow(headers)
@@ -57,7 +57,7 @@ def build_master_data_export(db: Session, user_id: uuid.UUID) -> MasterDataExpor
     institution_by_id = {item.id: item for item in institutions}
     account_by_id = {item.id: item for item in accounts}
 
-    institution_csv = _csv_bytes(
+    institution_csv = csv_bytes(
         [
             "institution_id",
             "name",
@@ -80,7 +80,7 @@ def build_master_data_export(db: Session, user_id: uuid.UUID) -> MasterDataExpor
             for item in institutions
         ],
     )
-    account_csv = _csv_bytes(
+    account_csv = csv_bytes(
         [
             "account_id",
             "institution_id",
@@ -133,7 +133,7 @@ def build_master_data_export(db: Session, user_id: uuid.UUID) -> MasterDataExpor
                 _timestamp(item.updated_at),
             ]
         )
-    project_csv = _csv_bytes(
+    project_csv = csv_bytes(
         [
             "project_id",
             "account_id",

@@ -2,6 +2,7 @@ import { apiRequest } from '../../api/client';
 import { blobRequest, saveBlob } from '../../api/download';
 
 export type ImportType = 'institution_account_project' | 'monthly_snapshot' | 'debt_event';
+export type DebtExportType = 'all' | 'receivable' | 'payable';
 
 export type ImportError = {
   row: number;
@@ -52,6 +53,44 @@ export const commitImport = (importType: ImportType, jobId: string) =>
     method: 'POST',
     body: JSON.stringify({ jobId }),
   });
+
+function exportParams(dateFrom: string, dateTo: string, debtType?: DebtExportType) {
+  const params = new URLSearchParams();
+  if (dateFrom) params.set('dateFrom', dateFrom);
+  if (dateTo) params.set('dateTo', dateTo);
+  if (debtType && debtType !== 'all') params.set('type', debtType);
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+export async function exportMasterData(): Promise<void> {
+  const blob = await blobRequest('/exports/master-data', { method: 'POST' });
+  const date = new Date().toISOString().slice(0, 10);
+  saveBlob(blob, `flow-ledger-master-data-${date}.zip`);
+}
+
+export async function exportMonthlySnapshots(dateFrom: string, dateTo: string): Promise<void> {
+  const blob = await blobRequest(
+    `/exports/monthly-snapshots${exportParams(dateFrom, dateTo)}`,
+    { method: 'POST' },
+  );
+  saveBlob(blob, `flow-ledger-monthly-snapshots-${dateFrom || 'all'}-${dateTo || 'all'}.csv`);
+}
+
+export async function exportDebtEvents(
+  debtType: DebtExportType,
+  dateFrom: string,
+  dateTo: string,
+): Promise<void> {
+  const blob = await blobRequest(
+    `/exports/debt-events${exportParams(dateFrom, dateTo, debtType)}`,
+    { method: 'POST' },
+  );
+  saveBlob(
+    blob,
+    `flow-ledger-debt-events-${debtType}-${dateFrom || 'all'}-${dateTo || 'all'}.csv`,
+  );
+}
 
 export async function exportBackup(): Promise<void> {
   const blob = await blobRequest('/backups/export', { method: 'POST' });

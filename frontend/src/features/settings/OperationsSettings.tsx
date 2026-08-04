@@ -15,6 +15,7 @@ import {
   DialogTitle,
   Divider,
   FormControlLabel,
+  MenuItem,
   Paper,
   Snackbar,
   Stack,
@@ -27,11 +28,15 @@ import { ApiClientError } from '../../api/client';
 import {
   commitImport,
   downloadImportTemplate,
+  exportDebtEvents,
   exportBackup,
+  exportMasterData,
+  exportMonthlySnapshots,
   restoreBackup,
   uploadBackup,
   validateImport,
   type BackupMetadata,
+  type DebtExportType,
   type ImportJob,
   type ImportType,
 } from './operationsApi';
@@ -59,6 +64,29 @@ const importDefinitions: Array<{
   },
 ];
 
+type DataExportRequest = {
+  type: ImportType;
+  dateFrom?: string;
+  dateTo?: string;
+  debtType?: DebtExportType;
+};
+
+const exportLabels: Record<ImportType, string> = {
+  institution_account_project: '导出全部主数据',
+  monthly_snapshot: '导出快照 CSV',
+  debt_event: '导出事件 CSV',
+};
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function monthsAgo(months: number) {
+  const value = new Date();
+  value.setUTCMonth(value.getUTCMonth() - months);
+  return value.toISOString().slice(0, 10);
+}
+
 function operationError(error: unknown): string | undefined {
   if (!error) return undefined;
   return error instanceof ApiClientError ? error.message : '操作失败，请稍后重试';
@@ -70,6 +98,10 @@ export function OperationsSettings() {
   const [notice, setNotice] = useState<string>();
   const [backup, setBackup] = useState<BackupMetadata>();
   const [restoreDialog, setRestoreDialog] = useState(false);
+  const [dataExportDialog, setDataExportDialog] = useState<ImportType | null>(null);
+  const [exportDateFrom, setExportDateFrom] = useState(() => monthsAgo(12));
+  const [exportDateTo, setExportDateTo] = useState(today);
+  const [debtExportType, setDebtExportType] = useState<DebtExportType>('all');
   const [password, setPassword] = useState('');
   const [confirmed, setConfirmed] = useState(false);
 
@@ -94,7 +126,24 @@ export function OperationsSettings() {
     mutationFn: downloadImportTemplate,
     onSuccess: () => setNotice('模板已下载'),
   });
-  const exportMutation = useMutation({
+  const dataExportMutation = useMutation({
+    mutationFn: (request: DataExportRequest) => {
+      if (request.type === 'institution_account_project') return exportMasterData();
+      if (request.type === 'monthly_snapshot') {
+        return exportMonthlySnapshots(request.dateFrom ?? '', request.dateTo ?? '');
+      }
+      return exportDebtEvents(
+        request.debtType ?? 'all',
+        request.dateFrom ?? '',
+        request.dateTo ?? '',
+      );
+    },
+    onSuccess: (_, request) => {
+      setDataExportDialog(null);
+      setNotice(`${exportLabels[request.type]}已完成`);
+    },
+  });
+  const backupExportMutation = useMutation({
     mutationFn: exportBackup,
     onSuccess: () => setNotice('完整备份已下载'),
   });
@@ -119,7 +168,8 @@ export function OperationsSettings() {
     validationMutation.error ??
     commitMutation.error ??
     templateMutation.error ??
-    exportMutation.error ??
+    (!dataExportDialog ? dataExportMutation.error : undefined) ??
+    backupExportMutation.error ??
     uploadMutation.error ??
     restoreMutation.error;
 
@@ -129,12 +179,29 @@ export function OperationsSettings() {
   const handleBackupFile = (file?: File) => {
     if (file) uploadMutation.mutate(file);
   };
+  const openDataExport = (type: ImportType) => {
+    dataExportMutation.reset();
+    if (type === 'institution_account_project') {
+      dataExportMutation.mutate({ type });
+      return;
+    }
+    setDataExportDialog(type);
+  };
+  const closeDataExport = () => {
+    if (!dataExportMutation.isPending) {
+      dataExportMutation.reset();
+      setDataExportDialog(null);
+    }
+  };
   const closeRestore = () => {
     if (restoreMutation.isPending) return;
     setRestoreDialog(false);
     setPassword('');
     setConfirmed(false);
   };
+  const invalidExportRange = Boolean(
+    exportDateFrom && exportDateTo && exportDateFrom > exportDateTo,
+  );
 
   return (
     <>
@@ -144,7 +211,7 @@ export function OperationsSettings() {
           导入、导出与恢复
         </Typography>
         <Typography sx={{ mt: 0.5, color: 'text.secondary', fontSize: 13 }}>
-          所有 CSV 都会先完整校验；存在任何冲突时整批拒绝，不覆盖现有数据。
+          集中管理三类业务数据；CSV 导入会先完整校验，导出不会改变现有数据。
         </Typography>
       </Box>
       {error && <Alert severity="error">{operationError(error)}</Alert>}
@@ -160,7 +227,8 @@ export function OperationsSettings() {
           const status = importStatus(job);
           const busy =
             (validationMutation.isPending && validationMutation.variables.type === definition.type) ||
-            (commitMutation.isPending && commitMutation.variables.type === definition.type);
+            (commitMutation.isPending && commitMutation.variables.type === definition.type) ||
+            (dataExportMutation.isPending && dataExportMutation.variables.type === definition.type);
           return (
             <Paper
               key={definition.type}
@@ -225,6 +293,16 @@ export function OperationsSettings() {
                     />
                   </Button>
                 )}
+                <Button
+                  size="small"
+                  disabled={busy}
+                  startIcon={busy && dataExportMutation.variables?.type === definition.type
+                    ? <CircularProgress aria-label="正在导出数据" size={15} />
+                    : <CloudDownloadOutlined />}
+                  onClick={() => openDataExport(definition.type)}
+                >
+                  {exportLabels[definition.type]}
+                </Button>
               </Stack>
             </Paper>
           );
@@ -246,9 +324,9 @@ export function OperationsSettings() {
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
             <Button
               variant="outlined"
-              startIcon={exportMutation.isPending ? <CircularProgress aria-label="正在导出备份" size={16} /> : <BackupOutlined />}
-              disabled={exportMutation.isPending}
-              onClick={() => exportMutation.mutate()}
+              startIcon={backupExportMutation.isPending ? <CircularProgress aria-label="正在导出备份" size={16} /> : <BackupOutlined />}
+              disabled={backupExportMutation.isPending}
+              onClick={() => backupExportMutation.mutate()}
             >
               导出完整备份
             </Button>
@@ -273,6 +351,72 @@ export function OperationsSettings() {
           </Stack>
         </Stack>
       </Paper>
+
+      <Dialog open={Boolean(dataExportDialog)} onClose={closeDataExport} fullWidth maxWidth="xs">
+        <DialogTitle>
+          {dataExportDialog === 'monthly_snapshot' ? '导出月度快照' : '导出债权债务事件'}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Alert severity="info">
+              日期范围包含开始和结束日期；留空表示不限制。导出包含当前筛选范围内的全部记录。
+            </Alert>
+            {dataExportDialog === 'debt_event' && (
+              <TextField
+                select
+                label="债权债务类型"
+                value={debtExportType}
+                onChange={(event) => setDebtExportType(event.target.value as DebtExportType)}
+                disabled={dataExportMutation.isPending}
+              >
+                <MenuItem value="all">全部类型</MenuItem>
+                <MenuItem value="receivable">债权</MenuItem>
+                <MenuItem value="payable">债务</MenuItem>
+              </TextField>
+            )}
+            <TextField
+              label="开始日期"
+              type="date"
+              value={exportDateFrom}
+              onChange={(event) => setExportDateFrom(event.target.value)}
+              error={invalidExportRange}
+              disabled={dataExportMutation.isPending}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+            <TextField
+              label="结束日期"
+              type="date"
+              value={exportDateTo}
+              onChange={(event) => setExportDateTo(event.target.value)}
+              error={invalidExportRange}
+              helperText={invalidExportRange ? '开始日期不能晚于结束日期' : '可清空日期以取消该边界'}
+              disabled={dataExportMutation.isPending}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+            {dataExportMutation.error && (
+              <Alert severity="error">{operationError(dataExportMutation.error)}</Alert>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeDataExport} disabled={dataExportMutation.isPending}>取消</Button>
+          <Button
+            variant="contained"
+            startIcon={dataExportMutation.isPending
+              ? <CircularProgress aria-label="正在导出数据" size={16} />
+              : <CloudDownloadOutlined />}
+            disabled={invalidExportRange || dataExportMutation.isPending}
+            onClick={() => dataExportDialog && dataExportMutation.mutate({
+              type: dataExportDialog,
+              dateFrom: exportDateFrom,
+              dateTo: exportDateTo,
+              debtType: debtExportType,
+            })}
+          >
+            导出 CSV
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={restoreDialog} onClose={closeRestore} fullWidth maxWidth="sm">
         <DialogTitle>确认全量恢复</DialogTitle>

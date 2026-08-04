@@ -114,12 +114,6 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await page.getByRole('dialog').getByRole('button', { name: '保存' }).click();
   await expect(page.getByText('E2E Balance', { exact: true })).toBeVisible();
   await expect(page.getByRole('dialog')).not.toBeVisible();
-  const masterDataDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: '导出主数据' }).click();
-  expect((await masterDataDownload).suggestedFilename()).toMatch(
-    /^flow-ledger-master-data-\d{4}-\d{2}-\d{2}\.zip$/,
-  );
-  await expect(page.getByText('机构、账户和项目数据已导出')).toBeVisible();
   await expectNoSeriousAccessibilityIssues(page, 'master-data');
 
   await page.getByRole('button', { name: '月度快照' }).click();
@@ -228,6 +222,35 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
 
   await page.getByRole('button', { name: '设置' }).click();
   await expect(page.getByRole('heading', { level: 1, name: '设置' })).toBeVisible();
+
+  const masterDataDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出全部主数据' }).click();
+  expect((await masterDataDownload).suggestedFilename()).toMatch(
+    /^flow-ledger-master-data-\d{4}-\d{2}-\d{2}\.zip$/,
+  );
+  await expect(page.getByText('导出全部主数据已完成')).toBeVisible();
+
+  await page.getByRole('button', { name: '导出快照 CSV' }).click();
+  const snapshotExportDialog = page.getByRole('dialog', { name: '导出月度快照' });
+  await snapshotExportDialog.getByLabel('开始日期').fill('2026-07-01');
+  await snapshotExportDialog.getByLabel('结束日期').fill('2026-07-31');
+  const snapshotDataDownload = page.waitForEvent('download');
+  await snapshotExportDialog.getByRole('button', { name: '导出 CSV' }).click();
+  expect((await snapshotDataDownload).suggestedFilename()).toBe(
+    'flow-ledger-monthly-snapshots-2026-07-01-2026-07-31.csv',
+  );
+
+  await page.getByRole('button', { name: '导出事件 CSV' }).click();
+  const debtExportDialog = page.getByRole('dialog', { name: '导出债权债务事件' });
+  await debtExportDialog.getByLabel('债权债务类型').click();
+  await page.getByRole('option', { name: '债权', exact: true }).click();
+  await debtExportDialog.getByLabel('开始日期').fill('2026-07-01');
+  await debtExportDialog.getByLabel('结束日期').fill('2026-07-31');
+  const debtDataDownload = page.waitForEvent('download');
+  await debtExportDialog.getByRole('button', { name: '导出 CSV' }).click();
+  expect((await debtDataDownload).suggestedFilename()).toBe(
+    'flow-ledger-debt-events-receivable-2026-07-01-2026-07-31.csv',
+  );
 
   const profileForm = page.getByRole('form', { name: '修改账户资料' });
   await profileForm.getByLabel('显示名称').fill('E2E 管理员');
