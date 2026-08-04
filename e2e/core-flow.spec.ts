@@ -77,6 +77,24 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   expect(institutionRequest.postDataJSON().displayColor).toBe('#397c93');
   await expect(page.getByText('E2E Bank', { exact: true })).toBeVisible();
 
+  await addButtons.nth(0).click();
+  const emptyInstitutionDialog = page.getByRole('dialog');
+  await emptyInstitutionDialog.getByLabel('名称').fill('E2E Empty Institution');
+  await emptyInstitutionDialog.getByRole('button', { name: '保存' }).click();
+  await expect(page.getByText('E2E Empty Institution', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '删除机构 E2E Empty Institution' }).click();
+  const deleteEmptyInstitutionDialog = page.getByRole('dialog');
+  await expect(deleteEmptyInstitutionDialog.getByText('删除成功后无法恢复。', { exact: false })).toBeVisible();
+  const deleteEmptyInstitutionResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/v1/institutions/') &&
+      response.request().method() === 'DELETE',
+  );
+  await deleteEmptyInstitutionDialog.getByRole('button', { name: '确认删除' }).click();
+  expect((await deleteEmptyInstitutionResponse).status()).toBe(204);
+  await expect(deleteEmptyInstitutionDialog).not.toBeVisible();
+  await expect(page.getByText('E2E Empty Institution', { exact: true })).toHaveCount(0);
+
   await page.getByRole('button', { name: '编辑账户 E2E Account' }).click();
   const associateAccountDialog = page.getByRole('dialog');
   await associateAccountDialog.getByLabel('所属机构').click();
@@ -109,6 +127,19 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('月度快照已保存')).toBeVisible();
   await expectNoSeriousAccessibilityIssues(page, 'snapshot-grid');
+
+  await page.getByRole('button', { name: '机构与账户' }).click();
+  await page.getByRole('button', { name: '删除项目 E2E Balance' }).click();
+  const blockedDeleteDialog = page.getByRole('dialog');
+  const blockedDeleteResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/v1/projects/') &&
+      response.request().method() === 'DELETE',
+  );
+  await blockedDeleteDialog.getByRole('button', { name: '确认删除' }).click();
+  expect((await blockedDeleteResponse).status()).toBe(409);
+  await expect(blockedDeleteDialog.getByText('项目已有快照记录，不能删除；如不再使用，请将项目停用')).toBeVisible();
+  await blockedDeleteDialog.getByRole('button', { name: '取消' }).click();
 
   await page.getByRole('button', { name: '首页看板' }).click();
   await expect(

@@ -2,12 +2,13 @@ import AccountBalanceOutlined from '@mui/icons-material/AccountBalanceOutlined';
 import AddOutlined from '@mui/icons-material/AddOutlined';
 import BlockOutlined from '@mui/icons-material/BlockOutlined';
 import CheckOutlined from '@mui/icons-material/CheckOutlined';
+import DeleteOutlineOutlined from '@mui/icons-material/DeleteOutlineOutlined';
 import EditOutlined from '@mui/icons-material/EditOutlined';
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined';
 import LinkOffOutlined from '@mui/icons-material/LinkOffOutlined';
 import WalletOutlined from '@mui/icons-material/WalletOutlined';
 import {
-  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
   FormControl, FormControlLabel, FormHelperText, FormLabel, IconButton, List,
   ListItem, ListItemButton, MenuItem, Paper, Snackbar, Stack, Switch, TextField,
   Typography,
@@ -17,8 +18,9 @@ import { useState } from 'react';
 import { ApiClientError } from '../../api/client';
 import { getCurrencies } from '../settings/api';
 import {
-  createAccount, createInstitution, createProject, deactivateProject, getAccounts,
-  getInstitutions, getProjects, getUnassignedAccounts, updateAccount, updateInstitution, updateProject,
+  createAccount, createInstitution, createProject, deactivateProject, deleteAccount,
+  deleteInstitution, deleteProject, getAccounts, getInstitutions, getProjects,
+  getUnassignedAccounts, updateAccount, updateInstitution, updateProject,
   type Account, type Institution, type Project,
 } from './api';
 import { containsFullAccountNumber } from './validation';
@@ -26,6 +28,7 @@ import { containsFullAccountNumber } from './validation';
 type EditorKind = 'institution' | 'account' | 'project';
 type Values = Record<string, string | boolean>;
 type Editor = { kind: EditorKind; id?: string; values: Values } | null;
+type DeleteTarget = { kind: EditorKind; id: string; name: string } | null;
 
 const institutionTypes = [['bank', '银行'], ['broker', '券商'], ['cash', '现金'], ['person', '个人'], ['other', '其他']];
 const accountTypes = [['savings', '储蓄账户'], ['wealth_management', '理财账户'], ['brokerage', '证券账户'], ['cash_wallet', '现金钱包'], ['loan_related', '借贷相关'], ['other', '其他']];
@@ -34,6 +37,12 @@ const liquidityLevels = [['t0', '随时可用'], ['within_7d', '7 天内'], ['wi
 const riskLevels = [['low', '低风险'], ['medium', '中风险'], ['high', '高风险']];
 const displayColors = ['#2f7d6d', '#397c93', '#66558c', '#9b6a22', '#a44740', '#40514d'];
 const UNASSIGNED_INSTITUTION_ID = '__unassigned__';
+const entityLabels: Record<EditorKind, string> = { institution: '机构', account: '账户', project: '项目' };
+const deleteHints: Record<EditorKind, string> = {
+  institution: '仅当机构下没有账户时才能删除。',
+  account: '仅当账户下没有项目时才能删除。',
+  project: '仅当项目没有任何快照记录时才能删除；已有快照的项目请改为停用。',
+};
 
 function normalizeDisplayColor(value: string | null | undefined, fallback: string) {
   return value && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : fallback;
@@ -112,6 +121,7 @@ export function MasterDataPage() {
   const [selectedInstitution, setSelectedInstitution] = useState('');
   const [selectedAccount, setSelectedAccount] = useState('');
   const [editor, setEditor] = useState<Editor>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const institutionsQuery = useQuery({ queryKey: ['institutions'], queryFn: getInstitutions });
@@ -159,21 +169,38 @@ export function MasterDataPage() {
     onSuccess: async () => { await invalidate(); setEditor(null); setNotice('保存成功'); },
   });
   const deactivateMutation = useMutation({ mutationFn: deactivateProject, onSuccess: async () => { await invalidate(); setNotice('项目已停用，历史数据仍会保留'); } });
+  const deleteMutation = useMutation({
+    mutationFn: async (target: NonNullable<DeleteTarget>) => {
+      if (target.kind === 'institution') return deleteInstitution(target.id);
+      if (target.kind === 'account') return deleteAccount(target.id);
+      return deleteProject(target.id);
+    },
+    onSuccess: async (_, target) => {
+      if (target.kind === 'institution' && target.id === institutionId) setSelectedInstitution('');
+      if (target.kind === 'account' && target.id === accountId) setSelectedAccount('');
+      setDeleteTarget(null);
+      await invalidate();
+      setNotice(`${entityLabels[target.kind]}已删除`);
+    },
+  });
 
   const openInstitution = (item?: Institution) => setEditor({ kind: 'institution', id: item?.id, values: { name: item?.name ?? '', type: item?.institution_type ?? 'bank', color: normalizeDisplayColor(item?.display_color, '#2f7d6d'), active: item?.is_active ?? true } });
   const openAccount = (item?: Account) => setEditor({ kind: 'account', id: item?.id, values: { parent: item ? (item.institution_id ?? '') : (isUnassigned ? '' : institutionId), name: item?.name ?? '', type: item?.account_type ?? (institutions.find((entry) => entry.id === institutionId)?.institution_type === 'cash' ? 'cash_wallet' : 'savings'), identifier: item?.masked_identifier ?? '', color: normalizeDisplayColor(item?.display_color, '#40514d'), active: item?.is_active ?? true } });
   const openProject = (item?: Project) => setEditor({ kind: 'project', id: item?.id, values: { parent: item?.account_id ?? accountId, name: item?.name ?? '', type: item?.asset_type ?? 'bank_deposit', currency: item?.currency_code ?? 'CNY', liquidity: item?.default_liquidity_level ?? 't0', risk: item?.default_risk_level ?? 'low', notes: item?.notes ?? '', active: item?.is_active ?? true } });
+  const openDelete = (target: NonNullable<DeleteTarget>) => { deleteMutation.reset(); setDeleteTarget(target); };
+  const closeDelete = () => { if (!deleteMutation.isPending) { deleteMutation.reset(); setDeleteTarget(null); } };
   const setValue = (key: string, value: string | boolean) => setEditor((current) => current ? { ...current, values: { ...current.values, [key]: value } } : current);
   const error = saveMutation.error ?? institutionsQuery.error ?? accountsQuery.error ?? unassignedAccountsQuery.error ?? projectsQuery.error;
   const errorMessage = error instanceof ApiClientError || error instanceof Error ? error.message : null;
+  const deleteErrorMessage = deleteMutation.error instanceof ApiClientError || deleteMutation.error instanceof Error ? deleteMutation.error.message : null;
 
   return <Box>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', mb: 3 }}><Box><Typography variant="h4" sx={{ fontWeight: 780 }}>机构与账户</Typography><Typography color="text.secondary" sx={{ mt: 0.5 }}>按机构、账户和项目整理资产；账户仅保存脱敏标识。</Typography></Box><Chip icon={<WalletOutlined />} label="现金使用显式钱包维护" color="primary" variant="outlined" /></Stack>
     {errorMessage && <Alert severity="error" sx={{ mb: 2 }}>{errorMessage}</Alert>}
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '0.85fr 1fr 1.25fr' }, gap: 2, alignItems: 'start' }}>
-      <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}><PanelHeader title="机构" subtitle={`${institutions.length} 个机构`} onAdd={() => openInstitution()} /><List disablePadding><ListItem disablePadding><ListItemButton selected={isUnassigned} onClick={() => { setSelectedInstitution(UNASSIGNED_INSTITUTION_ID); setSelectedAccount(''); }} sx={{ py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}><Box sx={{ width: 34, height: 34, borderRadius: 1.5, display: 'grid', placeItems: 'center', bgcolor: 'action.selected', color: 'text.secondary', mr: 1.5 }}><LinkOffOutlined fontSize="small" /></Box><Box sx={{ flex: 1, minWidth: 0 }}><Typography noWrap sx={{ fontSize: 13, fontWeight: 700 }}>待关联账户</Typography><Typography color="text.secondary" sx={{ fontSize: 11 }}>{unassignedAccounts.length} 个账户 · 关联机构后进入快照</Typography></Box></ListItemButton></ListItem>{institutions.map((item) => <ListItem key={item.id} disablePadding secondaryAction={<Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>{!item.is_active && <Chip label="停用" size="small" />}<IconButton aria-label={`编辑机构 ${item.name}`} size="small" onClick={() => openInstitution(item)}><EditOutlined fontSize="small" /></IconButton></Stack>}><ListItemButton selected={item.id === institutionId} onClick={() => { setSelectedInstitution(item.id); setSelectedAccount(''); }} sx={{ py: 1.5, pr: item.is_active ? 7 : 12, borderBottom: '1px solid', borderColor: 'divider' }}><Box sx={{ width: 34, height: 34, borderRadius: 1.5, display: 'grid', placeItems: 'center', bgcolor: item.display_color ?? '#dceae6', color: 'white', mr: 1.5 }}><AccountBalanceOutlined fontSize="small" /></Box><Box sx={{ flex: 1, minWidth: 0 }}><Typography noWrap sx={{ fontSize: 13, fontWeight: 700 }}>{item.name}</Typography><Typography color="text.secondary" sx={{ fontSize: 11 }}>{item.account_count} 个账户 · {item.project_count} 个项目</Typography></Box></ListItemButton></ListItem>)}</List></Paper>
-      <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}><PanelHeader title="账户" subtitle={isUnassigned ? `${accounts.length} 个待关联账户` : `${accounts.length} 个账户`} onAdd={() => openAccount()} /><List disablePadding>{accounts.map((item) => <ListItem key={item.id} disablePadding secondaryAction={<Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>{isUnassigned && <Chip label="待关联" size="small" color="warning" variant="outlined" />}{!item.is_active && <Chip label="停用" size="small" />}<IconButton aria-label={`编辑账户 ${item.name}`} size="small" onClick={() => openAccount(item)}><EditOutlined fontSize="small" /></IconButton></Stack>}><ListItemButton selected={item.id === accountId} onClick={() => setSelectedAccount(item.id)} sx={{ py: 1.5, pr: isUnassigned || !item.is_active ? 12 : 7, borderBottom: '1px solid', borderColor: 'divider' }}><WalletOutlined sx={{ color: 'primary.main', mr: 1.5 }} /><Box sx={{ flex: 1, minWidth: 0 }}><Typography noWrap sx={{ fontSize: 13, fontWeight: 700 }}>{item.name}</Typography><Typography color="text.secondary" sx={{ fontSize: 11 }}>{item.masked_identifier || '未设置脱敏标识'} · {item.project_count} 个项目</Typography></Box></ListItemButton></ListItem>)}</List></Paper>
-      <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}><PanelHeader title="账户内项目" subtitle={accountId ? `${projects.length} 个项目（含停用历史）` : '请先选择账户'} onAdd={() => openProject()} disabled={!accountId} /><List disablePadding>{projects.map((item) => <ListItem key={item.id} secondaryAction={<Stack direction="row" spacing={0.5}><IconButton aria-label={`编辑项目 ${item.name}`} size="small" onClick={() => openProject(item)}><EditOutlined fontSize="small" /></IconButton>{item.is_active && <IconButton aria-label={`停用项目 ${item.name}`} color="warning" size="small" onClick={() => deactivateMutation.mutate(item.id)}><BlockOutlined fontSize="small" /></IconButton>}</Stack>} sx={{ py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}><Inventory2Outlined sx={{ color: item.is_active ? 'primary.main' : 'text.disabled', mr: 1.5 }} /><Box sx={{ minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><Typography noWrap sx={{ fontSize: 13, fontWeight: 700 }}>{item.name}</Typography><Chip size="small" label={item.currency_code} /><Chip size="small" color={item.is_active ? 'success' : 'default'} label={item.is_active ? '启用' : '已停用'} /></Stack><Typography color="text.secondary" noWrap sx={{ fontSize: 11 }}>{item.asset_type} · {item.default_liquidity_level} · {item.default_risk_level}{item.notes ? ` · ${item.notes}` : ''}</Typography></Box></ListItem>)}</List></Paper>
+      <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}><PanelHeader title="机构" subtitle={`${institutions.length} 个机构`} onAdd={() => openInstitution()} /><List disablePadding><ListItem disablePadding><ListItemButton selected={isUnassigned} onClick={() => { setSelectedInstitution(UNASSIGNED_INSTITUTION_ID); setSelectedAccount(''); }} sx={{ py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}><Box sx={{ width: 34, height: 34, borderRadius: 1.5, display: 'grid', placeItems: 'center', bgcolor: 'action.selected', color: 'text.secondary', mr: 1.5 }}><LinkOffOutlined fontSize="small" /></Box><Box sx={{ flex: 1, minWidth: 0 }}><Typography noWrap sx={{ fontSize: 13, fontWeight: 700 }}>待关联账户</Typography><Typography color="text.secondary" sx={{ fontSize: 11 }}>{unassignedAccounts.length} 个账户 · 关联机构后进入快照</Typography></Box></ListItemButton></ListItem>{institutions.map((item) => <ListItem key={item.id} disablePadding secondaryAction={<Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>{!item.is_active && <Chip label="停用" size="small" />}<IconButton aria-label={`编辑机构 ${item.name}`} size="small" onClick={() => openInstitution(item)}><EditOutlined fontSize="small" /></IconButton><IconButton aria-label={`删除机构 ${item.name}`} color="error" size="small" onClick={() => openDelete({ kind: 'institution', id: item.id, name: item.name })}><DeleteOutlineOutlined fontSize="small" /></IconButton></Stack>}><ListItemButton selected={item.id === institutionId} onClick={() => { setSelectedInstitution(item.id); setSelectedAccount(''); }} sx={{ py: 1.5, pr: item.is_active ? 12 : 17, borderBottom: '1px solid', borderColor: 'divider' }}><Box sx={{ width: 34, height: 34, borderRadius: 1.5, display: 'grid', placeItems: 'center', bgcolor: item.display_color ?? '#dceae6', color: 'white', mr: 1.5 }}><AccountBalanceOutlined fontSize="small" /></Box><Box sx={{ flex: 1, minWidth: 0 }}><Typography noWrap sx={{ fontSize: 13, fontWeight: 700 }}>{item.name}</Typography><Typography color="text.secondary" sx={{ fontSize: 11 }}>{item.account_count} 个账户 · {item.project_count} 个项目</Typography></Box></ListItemButton></ListItem>)}</List></Paper>
+      <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}><PanelHeader title="账户" subtitle={isUnassigned ? `${accounts.length} 个待关联账户` : `${accounts.length} 个账户`} onAdd={() => openAccount()} /><List disablePadding>{accounts.map((item) => <ListItem key={item.id} disablePadding secondaryAction={<Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>{isUnassigned && <Chip label="待关联" size="small" color="warning" variant="outlined" />}{!item.is_active && <Chip label="停用" size="small" />}<IconButton aria-label={`编辑账户 ${item.name}`} size="small" onClick={() => openAccount(item)}><EditOutlined fontSize="small" /></IconButton><IconButton aria-label={`删除账户 ${item.name}`} color="error" size="small" onClick={() => openDelete({ kind: 'account', id: item.id, name: item.name })}><DeleteOutlineOutlined fontSize="small" /></IconButton></Stack>}><ListItemButton selected={item.id === accountId} onClick={() => setSelectedAccount(item.id)} sx={{ py: 1.5, pr: isUnassigned || !item.is_active ? 17 : 12, borderBottom: '1px solid', borderColor: 'divider' }}><WalletOutlined sx={{ color: 'primary.main', mr: 1.5 }} /><Box sx={{ flex: 1, minWidth: 0 }}><Typography noWrap sx={{ fontSize: 13, fontWeight: 700 }}>{item.name}</Typography><Typography color="text.secondary" sx={{ fontSize: 11 }}>{item.masked_identifier || '未设置脱敏标识'} · {item.project_count} 个项目</Typography></Box></ListItemButton></ListItem>)}</List></Paper>
+      <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}><PanelHeader title="账户内项目" subtitle={accountId ? `${projects.length} 个项目（含停用历史）` : '请先选择账户'} onAdd={() => openProject()} disabled={!accountId} /><List disablePadding>{projects.map((item) => <ListItem key={item.id} secondaryAction={<Stack direction="row" spacing={0.5}><IconButton aria-label={`编辑项目 ${item.name}`} size="small" onClick={() => openProject(item)}><EditOutlined fontSize="small" /></IconButton>{item.is_active && <IconButton aria-label={`停用项目 ${item.name}`} color="warning" size="small" onClick={() => deactivateMutation.mutate(item.id)}><BlockOutlined fontSize="small" /></IconButton>}<IconButton aria-label={`删除项目 ${item.name}`} color="error" size="small" onClick={() => openDelete({ kind: 'project', id: item.id, name: item.name })}><DeleteOutlineOutlined fontSize="small" /></IconButton></Stack>} sx={{ py: 1.5, pr: 14, borderBottom: '1px solid', borderColor: 'divider' }}><Inventory2Outlined sx={{ color: item.is_active ? 'primary.main' : 'text.disabled', mr: 1.5 }} /><Box sx={{ minWidth: 0 }}><Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><Typography noWrap sx={{ fontSize: 13, fontWeight: 700 }}>{item.name}</Typography><Chip size="small" label={item.currency_code} /><Chip size="small" color={item.is_active ? 'success' : 'default'} label={item.is_active ? '启用' : '已停用'} /></Stack><Typography color="text.secondary" noWrap sx={{ fontSize: 11 }}>{item.asset_type} · {item.default_liquidity_level} · {item.default_risk_level}{item.notes ? ` · ${item.notes}` : ''}</Typography></Box></ListItem>)}</List></Paper>
     </Box>
 
     <Dialog open={Boolean(editor)} onClose={() => setEditor(null)} fullWidth maxWidth="sm">
@@ -186,6 +213,14 @@ export function MasterDataPage() {
         <FormControlLabel control={<Switch checked={Boolean(editor?.values.active)} onChange={(event) => setValue('active', event.target.checked)} />} label="启用" />
       </Stack></DialogContent>
       <DialogActions><Button onClick={() => setEditor(null)}>取消</Button><Button variant="contained" onClick={() => saveMutation.mutate()} disabled={!String(editor?.values.name ?? '').trim() || saveMutation.isPending}>保存</Button></DialogActions>
+    </Dialog>
+    <Dialog open={Boolean(deleteTarget)} onClose={closeDelete} fullWidth maxWidth="xs">
+      <DialogTitle>删除{deleteTarget ? entityLabels[deleteTarget.kind] : ''}</DialogTitle>
+      <DialogContent>
+        <DialogContentText>确定删除“{deleteTarget?.name}”吗？{deleteTarget ? deleteHints[deleteTarget.kind] : ''}删除成功后无法恢复。</DialogContentText>
+        {deleteErrorMessage && <Alert severity="error" sx={{ mt: 2 }}>{deleteErrorMessage}</Alert>}
+      </DialogContent>
+      <DialogActions><Button onClick={closeDelete} disabled={deleteMutation.isPending}>取消</Button><Button color="error" variant="contained" onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)} disabled={!deleteTarget || deleteMutation.isPending}>确认删除</Button></DialogActions>
     </Dialog>
     <Snackbar open={Boolean(notice)} autoHideDuration={3000} onClose={() => setNotice(null)} message={notice} />
   </Box>;

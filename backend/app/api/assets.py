@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import CurrentAuthDependency
 from app.core.errors import ApiError
 from app.db.session import get_db
-from app.models.asset import Account, Project
+from app.models.asset import Account, MonthlySnapshot, Project
 from app.models.audit import AuditLog
 from app.models.institution import Institution
 from app.schemas.asset import (
@@ -26,24 +26,45 @@ router = APIRouter()
 DbDependency = Annotated[Session, Depends(get_db)]
 
 
-def _institution(db: Session, user_id: uuid.UUID, entity_id: uuid.UUID) -> Institution:
-    entity = db.scalar(
-        select(Institution).where(Institution.id == entity_id, Institution.user_id == user_id)
+def _institution(
+    db: Session,
+    user_id: uuid.UUID,
+    entity_id: uuid.UUID,
+    *,
+    for_update: bool = False,
+) -> Institution:
+    statement = select(Institution).where(
+        Institution.id == entity_id, Institution.user_id == user_id
     )
+    entity = db.scalar(statement.with_for_update() if for_update else statement)
     if not entity:
         raise ApiError(404, "INSTITUTION_NOT_FOUND", "机构不存在")
     return entity
 
 
-def _account(db: Session, user_id: uuid.UUID, entity_id: uuid.UUID) -> Account:
-    entity = db.scalar(select(Account).where(Account.id == entity_id, Account.user_id == user_id))
+def _account(
+    db: Session,
+    user_id: uuid.UUID,
+    entity_id: uuid.UUID,
+    *,
+    for_update: bool = False,
+) -> Account:
+    statement = select(Account).where(Account.id == entity_id, Account.user_id == user_id)
+    entity = db.scalar(statement.with_for_update() if for_update else statement)
     if not entity:
         raise ApiError(404, "ACCOUNT_NOT_FOUND", "账户不存在")
     return entity
 
 
-def _project(db: Session, user_id: uuid.UUID, entity_id: uuid.UUID) -> Project:
-    entity = db.scalar(select(Project).where(Project.id == entity_id, Project.user_id == user_id))
+def _project(
+    db: Session,
+    user_id: uuid.UUID,
+    entity_id: uuid.UUID,
+    *,
+    for_update: bool = False,
+) -> Project:
+    statement = select(Project).where(Project.id == entity_id, Project.user_id == user_id)
+    entity = db.scalar(statement.with_for_update() if for_update else statement)
     if not entity:
         raise ApiError(404, "PROJECT_NOT_FOUND", "项目不存在")
     return entity
@@ -165,6 +186,37 @@ def update_institution(
     return InstitutionResponse.model_validate(entity)
 
 
+@router.delete("/institutions/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_institution(
+    entity_id: uuid.UUID,
+    auth: CurrentAuthDependency,
+    db: DbDependency,
+) -> None:
+    entity = _institution(db, auth.user.id, entity_id, for_update=True)
+    account_count = db.scalar(
+        select(func.count(Account.id)).where(Account.institution_id == entity.id)
+    )
+    if account_count:
+        raise ApiError(
+            409,
+            "INSTITUTION_HAS_ACCOUNTS",
+            "机构下仍有账户，请先删除账户或将账户关联到其他机构",
+        )
+    before = InstitutionResponse.model_validate(entity).model_dump(mode="json")
+    db.delete(entity)
+    _commit(
+        db,
+        user_id=auth.user.id,
+        action="institution.delete",
+        entity_type="institution",
+        entity_id=entity.id,
+        before=before,
+        after={"deleted": True},
+        conflict_code="INSTITUTION_DELETE_CONFLICT",
+        conflict_message="机构删除冲突，请刷新后重试",
+    )
+
+
 @router.get("/institutions/{institution_id}/accounts", response_model=list[AccountResponse])
 def list_accounts(
     institution_id: uuid.UUID, auth: CurrentAuthDependency, db: DbDependency
@@ -277,6 +329,37 @@ def update_account(
     return AccountResponse.model_validate(entity)
 
 
+@router.delete("/accounts/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_account(
+    entity_id: uuid.UUID,
+    auth: CurrentAuthDependency,
+    db: DbDependency,
+) -> None:
+    entity = _account(db, auth.user.id, entity_id, for_update=True)
+    project_count = db.scalar(
+        select(func.count(Project.id)).where(Project.account_id == entity.id)
+    )
+    if project_count:
+        raise ApiError(
+            409,
+            "ACCOUNT_HAS_PROJECTS",
+            "账户下仍有项目，请先删除项目",
+        )
+    before = AccountResponse.model_validate(entity).model_dump(mode="json")
+    db.delete(entity)
+    _commit(
+        db,
+        user_id=auth.user.id,
+        action="account.delete",
+        entity_type="account",
+        entity_id=entity.id,
+        before=before,
+        after={"deleted": True},
+        conflict_code="ACCOUNT_DELETE_CONFLICT",
+        conflict_message="账户删除冲突，请刷新后重试",
+    )
+
+
 @router.get("/accounts/{account_id}/projects", response_model=list[ProjectResponse])
 def list_projects(
     account_id: uuid.UUID, auth: CurrentAuthDependency, db: DbDependency
@@ -346,6 +429,37 @@ def update_project(
     )
     db.refresh(entity)
     return ProjectResponse.model_validate(entity)
+
+
+@router.delete("/projects/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project(
+    entity_id: uuid.UUID,
+    auth: CurrentAuthDependency,
+    db: DbDependency,
+) -> None:
+    entity = _project(db, auth.user.id, entity_id, for_update=True)
+    snapshot_count = db.scalar(
+        select(func.count(MonthlySnapshot.id)).where(MonthlySnapshot.project_id == entity.id)
+    )
+    if snapshot_count:
+        raise ApiError(
+            409,
+            "PROJECT_HAS_SNAPSHOTS",
+            "项目已有快照记录，不能删除；如不再使用，请将项目停用",
+        )
+    before = ProjectResponse.model_validate(entity).model_dump(mode="json")
+    db.delete(entity)
+    _commit(
+        db,
+        user_id=auth.user.id,
+        action="project.delete",
+        entity_type="project",
+        entity_id=entity.id,
+        before=before,
+        after={"deleted": True},
+        conflict_code="PROJECT_DELETE_CONFLICT",
+        conflict_message="项目删除冲突，请刷新后重试",
+    )
 
 
 @router.post("/projects/{entity_id}/deactivate", response_model=ProjectResponse)

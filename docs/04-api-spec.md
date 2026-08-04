@@ -149,6 +149,10 @@ API 前缀：`/api/v1`
 
 更新机构。
 
+### DELETE /institutions/{id}
+
+仅在机构下没有账户时删除机构，否则返回 `409 INSTITUTION_HAS_ACCOUNTS`。
+
 ### GET /institutions/{id}/accounts
 
 返回机构下账户。
@@ -164,6 +168,10 @@ API 前缀：`/api/v1`
 ### PUT /accounts/{id}
 
 更新账户。传入机构 ID 可完成关联，传入 `null` 可解除关联。
+
+### DELETE /accounts/{id}
+
+仅在账户下没有项目时删除账户，否则返回 `409 ACCOUNT_HAS_PROJECTS`。
 
 ### GET /accounts/{id}/projects
 
@@ -194,6 +202,10 @@ API 前缀：`/api/v1`
 ### POST /projects/{id}/deactivate
 
 停用项目。
+
+### DELETE /projects/{id}
+
+仅在项目没有任何月度快照记录时删除项目，否则返回 `409 PROJECT_HAS_SNAPSHOTS`。已有快照的项目应改为停用。
 
 ## 6. 月度快照
 

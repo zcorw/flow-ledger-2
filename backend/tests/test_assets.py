@@ -1,4 +1,8 @@
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+
+from app.db.session import get_session_factory
+from app.models.audit import AuditLog
 
 
 def bootstrap(client: TestClient) -> None:
@@ -166,3 +170,87 @@ def test_account_can_be_created_then_associated_with_an_institution(
     assert unlinked.json()["institution_id"] is None
     snapshot = client.get("/api/v1/snapshots", params={"date": "2026-07-31"})
     assert all(item["project_id"] != project_id for item in snapshot.json()["rows"])
+
+
+def test_hierarchy_deletion_requires_empty_children_and_no_snapshots(
+    client: TestClient,
+) -> None:
+    bootstrap(client)
+    institution = client.post(
+        "/api/v1/institutions",
+        json={"name": "临时机构", "institutionType": "bank", "isActive": True},
+    ).json()
+    account = client.post(
+        "/api/v1/accounts",
+        json={
+            "institutionId": institution["id"],
+            "name": "临时账户",
+            "accountType": "savings",
+            "isActive": True,
+        },
+    ).json()
+    project_payload = {
+        "accountId": account["id"],
+        "name": "临时项目",
+        "assetType": "bank_deposit",
+        "currencyCode": "CNY",
+        "defaultLiquidityLevel": "t0",
+        "defaultRiskLevel": "low",
+    }
+    project = client.post("/api/v1/projects", json=project_payload).json()
+
+    blocked_institution = client.delete(f"/api/v1/institutions/{institution['id']}")
+    assert blocked_institution.status_code == 409
+    assert blocked_institution.json()["error"]["code"] == "INSTITUTION_HAS_ACCOUNTS"
+    blocked_account = client.delete(f"/api/v1/accounts/{account['id']}")
+    assert blocked_account.status_code == 409
+    assert blocked_account.json()["error"]["code"] == "ACCOUNT_HAS_PROJECTS"
+
+    assert client.delete(f"/api/v1/projects/{project['id']}").status_code == 204
+    assert client.delete(f"/api/v1/accounts/{account['id']}").status_code == 204
+    assert client.delete(f"/api/v1/institutions/{institution['id']}").status_code == 204
+
+    cash = client.get("/api/v1/institutions").json()[0]
+    retained_account = client.post(
+        "/api/v1/accounts",
+        json={
+            "institutionId": cash["id"],
+            "name": "保留账户",
+            "accountType": "cash_wallet",
+            "isActive": True,
+        },
+    ).json()
+    retained_project = client.post(
+        "/api/v1/projects",
+        json={**project_payload, "accountId": retained_account["id"], "name": "历史项目"},
+    ).json()
+    snapshot = client.put(
+        "/api/v1/snapshots/bulk",
+        json={
+            "snapshotDate": "2026-07-31",
+            "rows": [
+                {
+                    "projectId": retained_project["id"],
+                    "originalAmount": "100",
+                    "liquidityLevel": "t0",
+                    "riskLevel": "low",
+                }
+            ],
+        },
+    )
+    assert snapshot.status_code == 200
+    blocked_project = client.delete(f"/api/v1/projects/{retained_project['id']}")
+    assert blocked_project.status_code == 409
+    assert blocked_project.json()["error"]["code"] == "PROJECT_HAS_SNAPSHOTS"
+
+    with get_session_factory()() as db:
+        actions = set(
+            db.scalars(
+                select(AuditLog.action).where(
+                    AuditLog.action.in_(
+                        ["institution.delete", "account.delete", "project.delete"]
+                    )
+                )
+            )
+        )
+    assert actions == {"institution.delete", "account.delete", "project.delete"}
