@@ -1,4 +1,5 @@
 import uuid
+from collections import defaultdict
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated
@@ -15,7 +16,12 @@ from app.models.audit import AuditLog
 from app.models.institution import Institution
 from app.schemas.snapshot import (
     CopyPreviousRequest,
+    HistoryLevel,
     SnapshotBulkRequest,
+    SnapshotHistoryCompositionPoint,
+    SnapshotHistoryResponse,
+    SnapshotHistoryRow,
+    SnapshotHistoryTrendPoint,
     SnapshotRowResponse,
     SnapshotSheetResponse,
     SnapshotWarning,
@@ -190,6 +196,179 @@ def get_snapshots(
     snapshot_date: Annotated[date, Query(alias="date")],
 ) -> SnapshotSheetResponse:
     return _sheet(db, auth.user.id, snapshot_date)
+
+
+def _history_scope(
+    db: Session,
+    user_id: uuid.UUID,
+    level: HistoryLevel,
+    entity_id: uuid.UUID,
+) -> tuple[str, list[uuid.UUID]]:
+    if level == "institution":
+        entity = db.scalar(
+            select(Institution).where(
+                Institution.id == entity_id,
+                Institution.user_id == user_id,
+            )
+        )
+        if entity is None:
+            raise ApiError(404, "INSTITUTION_NOT_FOUND", "机构不存在")
+        project_ids = list(
+            db.scalars(
+                select(Project.id)
+                .join(Account, Project.account_id == Account.id)
+                .where(
+                    Project.user_id == user_id,
+                    Account.institution_id == entity.id,
+                )
+            )
+        )
+        return entity.name, project_ids
+    if level == "account":
+        entity = db.scalar(
+            select(Account).where(Account.id == entity_id, Account.user_id == user_id)
+        )
+        if entity is None:
+            raise ApiError(404, "ACCOUNT_NOT_FOUND", "账户不存在")
+        project_ids = list(
+            db.scalars(
+                select(Project.id).where(
+                    Project.user_id == user_id,
+                    Project.account_id == entity.id,
+                )
+            )
+        )
+        return entity.name, project_ids
+    entity = db.scalar(
+        select(Project).where(Project.id == entity_id, Project.user_id == user_id)
+    )
+    if entity is None:
+        raise ApiError(404, "PROJECT_NOT_FOUND", "项目不存在")
+    return entity.name, [entity.id]
+
+
+@router.get("/history", response_model=SnapshotHistoryResponse)
+def get_snapshot_history(
+    auth: CurrentAuthDependency,
+    db: DbDependency,
+    level: Annotated[HistoryLevel, Query()],
+    entity_id: Annotated[uuid.UUID, Query(alias="entityId")],
+    date_from: Annotated[date | None, Query(alias="dateFrom")] = None,
+    date_to: Annotated[date | None, Query(alias="dateTo")] = None,
+) -> SnapshotHistoryResponse:
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise ApiError(400, "INVALID_DATE_RANGE", "开始日期不能晚于结束日期")
+    entity_name, project_ids = _history_scope(db, auth.user.id, level, entity_id)
+    records: list[tuple[MonthlySnapshot, Project, Account, Institution | None]] = []
+    if project_ids:
+        statement = (
+            select(MonthlySnapshot, Project, Account, Institution)
+            .join(Project, MonthlySnapshot.project_id == Project.id)
+            .join(Account, Project.account_id == Account.id)
+            .outerjoin(Institution, Account.institution_id == Institution.id)
+            .where(
+                MonthlySnapshot.user_id == auth.user.id,
+                MonthlySnapshot.project_id.in_(project_ids),
+            )
+            .order_by(
+                MonthlySnapshot.snapshot_date,
+                Institution.name,
+                Account.name,
+                Project.name,
+            )
+        )
+        if date_to is not None:
+            statement = statement.where(MonthlySnapshot.snapshot_date <= date_to)
+        records = list(db.execute(statement))
+
+    previous_by_project: dict[uuid.UUID, Decimal] = {}
+    changes: dict[uuid.UUID, tuple[Decimal | None, Decimal | None]] = {}
+    totals_by_date: dict[date, Decimal] = defaultdict(Decimal)
+    visible_records: list[tuple[MonthlySnapshot, Project, Account, Institution | None]] = []
+    for snapshot, project, account, institution in records:
+        previous = previous_by_project.get(project.id)
+        amount_change, percent_change, _ = _change_values(
+            snapshot.converted_amount_cny,
+            previous,
+        )
+        changes[snapshot.id] = (amount_change, percent_change)
+        previous_by_project[project.id] = snapshot.converted_amount_cny
+        totals_by_date[snapshot.snapshot_date] += snapshot.converted_amount_cny
+        if date_from is None or snapshot.snapshot_date >= date_from:
+            visible_records.append((snapshot, project, account, institution))
+
+    visible_dates = sorted({snapshot.snapshot_date for snapshot, *_ in visible_records})
+    trend = [
+        SnapshotHistoryTrendPoint(snapshot_date=item, amount_cny=totals_by_date[item])
+        for item in visible_dates
+    ]
+    latest_date = visible_dates[-1] if visible_dates else None
+    latest_amount = totals_by_date[latest_date] if latest_date is not None else None
+    previous_dates = (
+        sorted(item for item in totals_by_date if item < latest_date)
+        if latest_date is not None
+        else []
+    )
+    previous_amount = totals_by_date[previous_dates[-1]] if previous_dates else None
+    latest_change, latest_percent, _ = _change_values(latest_amount, previous_amount)
+
+    composition_values: dict[tuple[uuid.UUID, str], Decimal] = defaultdict(Decimal)
+    if latest_date is not None and level != "project":
+        for snapshot, project, account, _institution in visible_records:
+            if snapshot.snapshot_date != latest_date:
+                continue
+            key = (
+                (account.id, account.name)
+                if level == "institution"
+                else (project.id, project.name)
+            )
+            composition_values[key] += snapshot.converted_amount_cny
+    composition = [
+        SnapshotHistoryCompositionPoint(entity_id=item_id, name=name, amount_cny=value)
+        for (item_id, name), value in sorted(
+            composition_values.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+    ]
+
+    history_rows = [
+        SnapshotHistoryRow(
+            id=snapshot.id,
+            snapshot_date=snapshot.snapshot_date,
+            institution_name=institution.name if institution else None,
+            account_name=account.name,
+            project_name=project.name,
+            currency_code=snapshot.currency_code,
+            original_amount=snapshot.original_amount,
+            fx_rate_to_cny=snapshot.fx_rate_to_cny,
+            fx_is_stale=snapshot.fx_is_stale,
+            converted_amount_cny=snapshot.converted_amount_cny,
+            change_amount_cny=changes[snapshot.id][0],
+            change_percent=changes[snapshot.id][1],
+            change_note=snapshot.change_note,
+        )
+        for snapshot, project, account, institution in reversed(visible_records)
+    ]
+    amounts = [item.amount_cny for item in trend]
+    return SnapshotHistoryResponse(
+        level=level,
+        entity_id=entity_id,
+        entity_name=entity_name,
+        date_from=date_from,
+        date_to=date_to,
+        latest_snapshot_date=latest_date,
+        latest_amount_cny=latest_amount,
+        latest_change_amount_cny=latest_change,
+        latest_change_percent=latest_percent,
+        max_amount_cny=max(amounts) if amounts else None,
+        min_amount_cny=min(amounts) if amounts else None,
+        snapshot_count=len(visible_dates),
+        record_count=len(history_rows),
+        trend=trend,
+        composition=composition,
+        rows=history_rows,
+    )
 
 
 @router.post("/copy-from-previous", response_model=SnapshotSheetResponse)

@@ -75,7 +75,9 @@ export function AppLayout() {
   }, [mobileOpen]);
   if (!user) return null;
 
-  const activeItem = navItems.find((item) => item.path === location.pathname) ?? navItems[0];
+  const activeItem = location.pathname === '/history'
+    ? { label: '历史快照', path: '/history' }
+    : (navItems.find((item) => item.path === location.pathname) ?? navItems[0]);
   const navigateTo = (path: string) => {
     setMobileOpen(false);
     void navigate(path);

@@ -197,6 +197,8 @@ create table monthly_snapshots (
 
 `snapshot_month` 使用 `YYYY-MM` 字符串，便于分组。保存前由 `snapshot_date` 推导。
 
+历史快照查询通过 `monthly_snapshots.project_id -> projects.account_id -> accounts.institution_id` 的当前关系实时汇总。快照表不冗余保存机构或账户归属；账户重新关联机构后，相关项目的全部历史同步归入新机构。停用状态不影响历史查询。
+
 ## 5. 债权债务
 
 ### debt_items

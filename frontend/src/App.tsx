@@ -9,6 +9,7 @@ const AppLayout = lazy(() => import('./layout/AppLayout').then((module) => ({ de
 const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage').then((module) => ({ default: module.DashboardPage })));
 const SnapshotPage = lazy(() => import('./features/snapshots/SnapshotPage').then((module) => ({ default: module.SnapshotPage })));
 const MasterDataPage = lazy(() => import('./features/assets/MasterDataPage').then((module) => ({ default: module.MasterDataPage })));
+const HistoryPage = lazy(() => import('./features/history/HistoryPage').then((module) => ({ default: module.HistoryPage })));
 const DebtPage = lazy(() => import('./features/debts/DebtPage').then((module) => ({ default: module.DebtPage })));
 const CurrencySettingsPage = lazy(() => import('./features/settings/CurrencySettingsPage').then((module) => ({ default: module.CurrencySettingsPage })));
 
@@ -32,6 +33,7 @@ export function App() {
               <Route index element={<DashboardPage />} />
               <Route path="snapshots" element={<SnapshotPage />} />
               <Route path="institutions" element={<MasterDataPage />} />
+              <Route path="history" element={<HistoryPage />} />
               <Route path="debts" element={<DebtPage />} />
               <Route path="settings" element={<CurrencySettingsPage />} />
             </Route>

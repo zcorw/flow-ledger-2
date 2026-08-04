@@ -266,3 +266,97 @@ def test_inactive_parent_hides_descendants_and_rejects_snapshot_writes(
     )
     assert rejected.status_code == 400
     assert rejected.json()["error"]["code"] == "ACCOUNT_INACTIVE"
+
+
+def test_history_uses_current_hierarchy_and_keeps_inactive_records_visible(
+    client: TestClient,
+) -> None:
+    cny_id, _, account_id, original_institution_id = bootstrap_hierarchy(client)
+    for snapshot_date, amount in (("2026-07-31", "100"), ("2026-08-31", "150")):
+        saved = client.put(
+            "/api/v1/snapshots/bulk",
+            json={
+                "snapshotDate": snapshot_date,
+                "rows": [
+                    {
+                        "projectId": cny_id,
+                        "originalAmount": amount,
+                        "liquidityLevel": "t0",
+                        "riskLevel": "low",
+                    }
+                ],
+            },
+        )
+        assert saved.status_code == 200
+
+    institution_history = client.get(
+        "/api/v1/snapshots/history",
+        params={"level": "institution", "entityId": original_institution_id},
+    )
+    assert institution_history.status_code == 200
+    history = institution_history.json()
+    assert history["latest_amount_cny"] == "150.000000"
+    assert history["latest_change_amount_cny"] == "50.000000"
+    assert history["max_amount_cny"] == "150.000000"
+    assert history["min_amount_cny"] == "100.000000"
+    assert history["snapshot_count"] == 2
+    assert history["record_count"] == 2
+    assert history["composition"][0]["name"] == "Assets"
+    assert history["rows"][0]["change_amount_cny"] == "50.000000"
+
+    filtered = client.get(
+        "/api/v1/snapshots/history",
+        params={
+            "level": "account",
+            "entityId": account_id,
+            "dateFrom": "2026-08-01",
+            "dateTo": "2026-08-31",
+        },
+    ).json()
+    assert filtered["snapshot_count"] == 1
+    assert filtered["latest_change_amount_cny"] == "50.000000"
+    assert filtered["composition"][0]["name"] == "CNY Balance"
+
+    project_history = client.get(
+        "/api/v1/snapshots/history",
+        params={"level": "project", "entityId": cny_id},
+    ).json()
+    assert project_history["composition"] == []
+    assert project_history["rows"][0]["project_name"] == "CNY Balance"
+
+    corrected_institution = client.post(
+        "/api/v1/institutions",
+        json={"name": "Correct Bank", "institutionType": "bank", "isActive": True},
+    ).json()
+    account_payload = {
+        "institutionId": corrected_institution["id"],
+        "name": "Assets",
+        "accountType": "savings",
+        "maskedIdentifier": "Tail 1234",
+        "isActive": True,
+    }
+    assert client.put(f"/api/v1/accounts/{account_id}", json=account_payload).status_code == 200
+
+    old_history = client.get(
+        "/api/v1/snapshots/history",
+        params={"level": "institution", "entityId": original_institution_id},
+    ).json()
+    corrected_history = client.get(
+        "/api/v1/snapshots/history",
+        params={"level": "institution", "entityId": corrected_institution["id"]},
+    ).json()
+    assert old_history["rows"] == []
+    assert len(corrected_history["rows"]) == 2
+
+    assert client.put(
+        f"/api/v1/institutions/{corrected_institution['id']}",
+        json={"name": "Correct Bank", "institutionType": "bank", "isActive": False},
+    ).status_code == 200
+    account_payload["isActive"] = False
+    assert client.put(f"/api/v1/accounts/{account_id}", json=account_payload).status_code == 200
+    assert client.post(f"/api/v1/projects/{cny_id}/deactivate").status_code == 200
+    inactive_history = client.get(
+        "/api/v1/snapshots/history",
+        params={"level": "institution", "entityId": corrected_institution["id"]},
+    ).json()
+    assert len(inactive_history["rows"]) == 2

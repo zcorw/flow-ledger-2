@@ -129,6 +129,26 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await expectNoSeriousAccessibilityIssues(page, 'snapshot-grid');
 
   await page.getByRole('button', { name: '机构与账户' }).click();
+  await page.getByRole('button', { name: '查看机构历史 E2E Bank' }).click();
+  await expect(page.getByRole('heading', { level: 4, name: 'E2E Bank' })).toBeVisible();
+  await expect(page.getByText('机构历史', { exact: true })).toBeVisible();
+  await expect(page.getByText('按当前关联关系实时汇总；调整账户关联后，全部历史会同步转移。')).toBeVisible();
+  await expect(page.getByRole('grid', { name: 'E2E Bank历史快照明细' }).getByText('E2E Balance')).toBeVisible();
+  await page.getByRole('button', { name: '返回机构与账户' }).click();
+
+  await page.getByRole('button', { name: '查看账户历史 E2E Account' }).click();
+  await expect(page.getByRole('heading', { level: 4, name: 'E2E Account' })).toBeVisible();
+  await expect(page.getByText('账户历史', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '返回机构与账户' }).click();
+
+  await page.getByRole('button', { name: '查看项目历史 E2E Balance' }).click();
+  await expect(page.getByRole('heading', { level: 4, name: 'E2E Balance' })).toBeVisible();
+  await expect(page.getByText('项目历史', { exact: true })).toBeVisible();
+  const historyDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出 CSV' }).click();
+  expect((await historyDownload).suggestedFilename()).toBe('E2E Balance-历史快照.csv');
+  await page.getByRole('button', { name: '返回机构与账户' }).click();
+
   await page.getByRole('button', { name: '删除项目 E2E Balance' }).click();
   const blockedDeleteDialog = page.getByRole('dialog');
   const blockedDeleteResponse = page.waitForResponse(

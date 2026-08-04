@@ -248,6 +248,17 @@ API 前缀：`/api/v1`
 
 响应包含汇率使用结果和保存后的折算金额。
 
+### GET /snapshots/history
+
+参数：
+
+- `level`：`institution`、`account` 或 `project`
+- `entityId`：对应层级 ID
+- `dateFrom`：可选开始日期
+- `dateTo`：可选结束日期
+
+返回当前关联关系下的概览、趋势、最新一期下级构成和逐条快照明细。接口不按启用状态过滤；账户重新关联后，全部历史实时归入新机构。
+
 ## 7. 债权债务
 
 ### GET /debts?type=receivable
