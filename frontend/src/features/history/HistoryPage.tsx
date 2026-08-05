@@ -127,17 +127,6 @@ export function HistoryPage() {
 
   const columns = useMemo<GridColDef<SnapshotHistoryRow>[]>(() => [
     { field: 'snapshot_date', headerName: '快照日期', width: 112 },
-    { field: 'institution_name', headerName: '机构', width: 130, valueFormatter: (value) => value ?? '待关联' },
-    { field: 'account_name', headerName: '账户', width: 140 },
-    { field: 'project_name', headerName: '项目', width: 150 },
-    { field: 'original_amount', headerName: '原币金额', width: 130, align: 'right', headerAlign: 'right', valueFormatter: (value) => number.format(Number(value)) },
-    { field: 'currency_code', headerName: '币种', width: 75 },
-    { field: 'fx_rate_to_cny', headerName: '使用汇率', width: 110, valueFormatter: (value) => Number(value).toFixed(6) },
-    { field: 'converted_amount_cny', headerName: 'CNY 折算', width: 140, align: 'right', headerAlign: 'right', valueFormatter: (value) => cny.format(Number(value)) },
-    { field: 'change_amount_cny', headerName: '较上期变化', width: 135, align: 'right', headerAlign: 'right', valueFormatter: (value) => value == null ? '—' : cny.format(Number(value)) },
-    { field: 'change_percent', headerName: '变化比例', width: 105, valueFormatter: (value) => value == null ? '—' : `${(Number(value) * 100).toFixed(1)}%` },
-    { field: 'fx_is_stale', headerName: '汇率状态', width: 105, renderCell: ({ value }) => <Chip size="small" color={value ? 'warning' : 'success'} label={value ? '历史' : '当日'} /> },
-    { field: 'change_note', headerName: '备注', minWidth: 180, flex: 1, valueFormatter: (value) => value || '—' },
     {
       field: 'actions',
       headerName: '操作',
@@ -159,6 +148,17 @@ export function HistoryPage() {
         </Button>
       ),
     },
+    { field: 'institution_name', headerName: '机构', width: 130, valueFormatter: (value) => value ?? '待关联' },
+    { field: 'account_name', headerName: '账户', width: 140 },
+    { field: 'project_name', headerName: '项目', width: 150 },
+    { field: 'original_amount', headerName: '原币金额', width: 130, align: 'right', headerAlign: 'right', valueFormatter: (value) => number.format(Number(value)) },
+    { field: 'currency_code', headerName: '币种', width: 75 },
+    { field: 'fx_rate_to_cny', headerName: '使用汇率', width: 110, valueFormatter: (value) => Number(value).toFixed(6) },
+    { field: 'converted_amount_cny', headerName: 'CNY 折算', width: 140, align: 'right', headerAlign: 'right', valueFormatter: (value) => cny.format(Number(value)) },
+    { field: 'change_amount_cny', headerName: '较上期变化', width: 135, align: 'right', headerAlign: 'right', valueFormatter: (value) => value == null ? '—' : cny.format(Number(value)) },
+    { field: 'change_percent', headerName: '变化比例', width: 105, valueFormatter: (value) => value == null ? '—' : `${(Number(value) * 100).toFixed(1)}%` },
+    { field: 'fx_is_stale', headerName: '汇率状态', width: 105, renderCell: ({ value }) => <Chip size="small" color={value ? 'warning' : 'success'} label={value ? '历史' : '当日'} /> },
+    { field: 'change_note', headerName: '备注', minWidth: 180, flex: 1, valueFormatter: (value) => value || '—' },
   ], [resetUpdateMutation]);
 
   const setQuickRange = (months: number | null) => {
