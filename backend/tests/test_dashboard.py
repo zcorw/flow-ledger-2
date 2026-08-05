@@ -2,9 +2,12 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.db.session import get_session_factory
+from app.models.asset import Account
 from app.models.fx import FxRate
+from app.models.institution import Institution
 
 
 def bootstrap(client: TestClient) -> tuple[str, str, str]:
@@ -238,15 +241,24 @@ def test_dashboard_uses_latest_active_snapshot_within_each_month(
     )
 
     assert client.post(f"/api/v1/projects/{usd_id}/deactivate").status_code == 200
-    hidden_summary = client.get(
+    with get_session_factory()() as db:
+        account = db.scalar(select(Account))
+        institution = db.scalar(select(Institution))
+        assert account is not None
+        assert institution is not None
+        account.is_active = False
+        institution.is_active = False
+        db.commit()
+
+    disabled_summary = client.get(
         "/api/v1/dashboard/summary", params={"snapshotDate": "2026-08-05"}
     ).json()
-    assert hidden_summary["total_assets_cny"] == "1300.000000"
-    hidden_charts = client.get(
+    assert disabled_summary["total_assets_cny"] == "1300.000000"
+    disabled_charts = client.get(
         "/api/v1/dashboard/charts", params={"snapshotDate": "2026-08-05"}
     ).json()
-    assert hidden_charts["trend"][-3:] == [
-        {"date": "2026-06-30", "value": "1000.000000"},
+    assert disabled_charts["trend"][-3:] == [
+        {"date": "2026-06-30", "value": "1700.000000"},
         {"date": "2026-07-31", "value": "1200.000000"},
         {"date": "2026-08-05", "value": "1300.000000"},
     ]

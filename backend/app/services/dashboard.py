@@ -55,13 +55,8 @@ def _monthly_snapshot_rows(
         )
         .join(Project, MonthlySnapshot.project_id == Project.id)
         .join(Account, Project.account_id == Account.id)
-        .join(Institution, Account.institution_id == Institution.id)
-        .where(
-            ranked_snapshots.c.position == 1,
-            Project.is_active.is_(True),
-            Account.is_active.is_(True),
-            Institution.is_active.is_(True),
-        )
+        .outerjoin(Institution, Account.institution_id == Institution.id)
+        .where(ranked_snapshots.c.position == 1)
     )
     if positive_only:
         statement = statement.where(MonthlySnapshot.converted_amount_cny > 0)
@@ -96,15 +91,9 @@ def _earliest_dashboard_date(
 ) -> date | None:
     earliest_snapshot = db.scalar(
         select(func.min(MonthlySnapshot.snapshot_date))
-        .join(Project, MonthlySnapshot.project_id == Project.id)
-        .join(Account, Project.account_id == Account.id)
-        .join(Institution, Account.institution_id == Institution.id)
         .where(
             MonthlySnapshot.user_id == user_id,
             MonthlySnapshot.snapshot_date <= target_date,
-            Project.is_active.is_(True),
-            Account.is_active.is_(True),
-            Institution.is_active.is_(True),
         )
     )
     earliest_debt = db.scalar(
@@ -251,11 +240,12 @@ def dashboard_charts(
     institutions: dict[str, Decimal] = defaultdict(Decimal)
     for snapshot, project, _account, institution in rows:
         value = snapshot.converted_amount_cny
+        institution_name = institution.name if institution else "未关联机构"
         asset_types[project.asset_type] += value
         liquidity[snapshot.liquidity_level] += value
         risk[snapshot.risk_level] += value
         currencies[snapshot.currency_code] += value
-        institutions[institution.name] += value
+        institutions[institution_name] += value
     receivable, _, debt_currencies, _ = _debt_values(db, user_id, target_date)
     if receivable > 0:
         asset_types["receivable"] += receivable
@@ -276,7 +266,7 @@ def dashboard_charts(
         [
             ProjectChangePoint(
                 project_name=project.name,
-                institution_name=institution.name,
+                institution_name=institution.name if institution else "未关联机构",
                 value=snapshot.converted_amount_cny - previous.get(project.id, Decimal("0")),
             )
             for snapshot, project, _account, institution in rows
