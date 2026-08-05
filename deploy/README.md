@@ -72,6 +72,18 @@ EXTERNAL_PROXY_PORT=18080
 APP_BASE_URL=https://ledger.example.com
 ```
 
+外部代理模式不会加载 Caddy 叠加配置，因此不需要以下 Caddy 专用变量：
+
+```env
+DOMAIN
+ACME_EMAIL
+HTTP_PORT
+HTTPS_PORT
+CADDYFILE
+```
+
+这些变量即使保留也不会生效，可以从 `.env.production` 删除。`APP_BASE_URL` 仍然必须保留，并填写用户通过外部代理实际访问的完整地址；`EXTERNAL_PROXY_PORT` 可省略，默认使用 `18080`。`HEALTHCHECK_URL` 为可选项，仅在需要部署脚本同时检查公网代理时设置。
+
 此模式不会创建 Caddy 容器，也不会占用宿主机 80/443。前端入口固定绑定回环地址：
 
 ```text
