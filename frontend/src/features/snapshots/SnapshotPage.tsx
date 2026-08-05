@@ -16,7 +16,13 @@ function SelectAllAmountEditCell(params: GridRenderEditCellParams<GridSnapshotRo
   return (
     <GridEditInputCell
       {...params}
-      slotProps={{ root: { onFocus: (event) => selectAllInputText(event.target) } }}
+      slotProps={{
+        root: {
+          type: 'text',
+          slotProps: { htmlInput: { inputMode: 'decimal' } },
+          onFocus: (event) => selectAllInputText(event.target),
+        },
+      }}
     />
   );
 }

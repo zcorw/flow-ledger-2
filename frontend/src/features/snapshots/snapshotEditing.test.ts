@@ -10,6 +10,7 @@ describe('snapshot amount editing', () => {
 
   it('selects the complete input value when editing receives focus', () => {
     const input = document.createElement('input');
+    input.type = 'text';
     input.value = '123456.78';
     input.setSelectionRange(3, 3);
 
