@@ -200,7 +200,7 @@ export function HistoryPage() {
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { lg: 'flex-start' }, mb: 3 }}>
         <Box>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <Typography variant="h4">{history?.entity_name ?? '历史快照'}</Typography>
+            <Typography component="h1" variant="h4">{history?.entity_name ?? '历史快照'}</Typography>
             <Chip size="small" label={`${levelLabels[level]}历史`} color="primary" variant="outlined" />
           </Stack>
           <Typography color="text.secondary" sx={{ mt: 0.75 }}>按当前关联关系实时汇总；调整账户关联后，全部历史会同步转移。</Typography>

@@ -26,6 +26,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { getMe, logout } from '../features/auth/api';
+import { useCompactPageTitle } from './useCompactPageTitle';
 
 const drawerWidth = 252;
 const navItems = [
@@ -73,11 +74,12 @@ export function AppLayout() {
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [mobileOpen]);
-  if (!user) return null;
-
   const activeItem = location.pathname === '/history'
     ? { label: '历史快照', path: '/history' }
     : (navItems.find((item) => item.path === location.pathname) ?? navItems[0]);
+  const compactPageTitle = useCompactPageTitle(location.pathname, activeItem.label, Boolean(user));
+  if (!user) return null;
+
   const navigateTo = (path: string) => {
     setMobileOpen(false);
     void navigate(path);
@@ -195,7 +197,20 @@ export function AppLayout() {
             >
               <MenuOutlined />
             </IconButton>
-            <Typography component="div" sx={{ fontSize: 21, fontWeight: 700 }}>{activeItem.label}</Typography>
+            <Typography
+              component="div"
+              aria-hidden={!compactPageTitle.visible}
+              sx={{
+                fontSize: 21,
+                fontWeight: 700,
+                opacity: compactPageTitle.visible ? 1 : 0,
+                visibility: compactPageTitle.visible ? 'visible' : 'hidden',
+                transform: compactPageTitle.visible ? 'translateY(0)' : 'translateY(6px)',
+                transition: 'opacity 160ms ease, transform 160ms ease, visibility 160ms',
+              }}
+            >
+              {compactPageTitle.title}
+            </Typography>
           </Toolbar>
         </AppBar>
         <Box id="main-content" tabIndex={-1} component="main" sx={{ p: { xs: 2, md: 4 }, outline: 'none' }}>

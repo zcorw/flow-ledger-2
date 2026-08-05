@@ -49,7 +49,7 @@ export function DebtPage() {
   const errorMessage = error instanceof ApiClientError || error instanceof Error ? error.message : null;
 
   return <Box>
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', mb: 3 }}><Box><Typography variant="h4" sx={{ fontWeight: 780 }}>债权债务</Typography><Typography color="text.secondary" sx={{ mt: 0.5 }}>通过事件时间线计算任意日期的未偿本金。</Typography></Box><Button variant="contained" startIcon={<AddOutlined />} onClick={() => setDebtDialog(true)}>新增{debtType === 'receivable' ? '债权' : '债务'}</Button></Stack>
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', mb: 3 }}><Box><Typography component="h1" variant="h4" sx={{ fontWeight: 780 }}>债权债务</Typography><Typography color="text.secondary" sx={{ mt: 0.5 }}>通过事件时间线计算任意日期的未偿本金。</Typography></Box><Button variant="contained" startIcon={<AddOutlined />} onClick={() => setDebtDialog(true)}>新增{debtType === 'receivable' ? '债权' : '债务'}</Button></Stack>
     <ToggleButtonGroup exclusive value={debtType} onChange={(_, value) => { if (value) { setDebtType(value); setSelectedId(''); } }} sx={{ mb: 2 }}><ToggleButton value="receivable"><ArrowUpwardOutlined sx={{ mr: 1 }} />债权</ToggleButton><ToggleButton value="payable"><ArrowDownwardOutlined sx={{ mr: 1 }} />债务</ToggleButton></ToggleButtonGroup>
     {errorMessage && <Alert severity="error" sx={{ mb: 2 }}>{errorMessage}</Alert>}
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '0.9fr 1.4fr' }, gap: 2 }}>

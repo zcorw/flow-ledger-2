@@ -59,7 +59,7 @@ export function SnapshotPage() {
 
   return <Box>
     <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { lg: 'center' }, mb: 3 }}>
-      <Box><Typography variant="h4" sx={{ fontWeight: 780 }}>月度快照</Typography><Typography color="text.secondary" sx={{ mt: 0.5 }}>按项目录入原币余额，保存时固化历史汇率与 CNY 折算值。</Typography></Box>
+      <Box><Typography component="h1" variant="h4" sx={{ fontWeight: 780 }}>月度快照</Typography><Typography color="text.secondary" sx={{ mt: 0.5 }}>按项目录入原币余额，保存时固化历史汇率与 CNY 折算值。</Typography></Box>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}><TextField label="快照日期" type="date" size="small" value={snapshotDate} onChange={(event) => setSnapshotDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} /><Button variant="outlined" startIcon={<ContentCopyOutlined />} onClick={() => copyMutation.mutate()} disabled={copyMutation.isPending}>复制上月</Button><Button variant="outlined" startIcon={<UploadFileOutlined />} disabled>导入</Button><Button variant="contained" startIcon={<SaveOutlined />} onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !rows.some((row) => row.original_amount !== null)}>保存</Button></Stack>
     </Stack>
     {errorMessage && <Alert severity="error" sx={{ mb: 2 }}>{errorMessage}</Alert>}
