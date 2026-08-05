@@ -196,6 +196,33 @@ def test_dashboard_uses_latest_active_snapshot_as_of_selected_date(
         {"name": "Dashboard Bank", "value": "1900.000000"}
     ]
 
+    charts_24_months = client.get(
+        "/api/v1/dashboard/charts",
+        params={"snapshotDate": "2026-08-05", "trendRange": "24m"},
+    ).json()
+    assert len(charts_24_months["trend"]) == 24
+    assert charts_24_months["trend"][-1] == {
+        "date": "2026-08-05",
+        "value": "1900.000000",
+    }
+
+    charts_all = client.get(
+        "/api/v1/dashboard/charts",
+        params={"snapshotDate": "2026-08-05", "trendRange": "all"},
+    ).json()
+    assert charts_all["trend"] == [
+        {"date": "2026-06-30", "value": "1700.000000"},
+        {"date": "2026-07-31", "value": "1900.000000"},
+        {"date": "2026-08-05", "value": "1900.000000"},
+    ]
+    assert (
+        client.get(
+            "/api/v1/dashboard/charts",
+            params={"snapshotDate": "2026-08-05", "trendRange": "invalid"},
+        ).status_code
+        == 422
+    )
+
     assert client.post(f"/api/v1/projects/{usd_id}/deactivate").status_code == 200
     hidden_summary = client.get(
         "/api/v1/dashboard/summary", params={"snapshotDate": "2026-08-05"}

@@ -2,6 +2,7 @@ import uuid
 from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import Literal
 
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
@@ -17,6 +18,8 @@ from app.schemas.dashboard import (
     TrendPoint,
 )
 from app.services.fx import resolve_rate
+
+TrendRange = Literal["12m", "24m", "all"]
 
 
 def _active_snapshot_rows(
@@ -84,6 +87,47 @@ def _trend_cutoffs(target_date: date, count: int = 12) -> list[date]:
             else _shift_month(month_start, 1) - timedelta(days=1)
         )
     return cutoffs
+
+
+def _earliest_dashboard_date(
+    db: Session, user_id: uuid.UUID, target_date: date
+) -> date | None:
+    earliest_snapshot = db.scalar(
+        select(func.min(MonthlySnapshot.snapshot_date))
+        .join(Project, MonthlySnapshot.project_id == Project.id)
+        .join(Account, Project.account_id == Account.id)
+        .join(Institution, Account.institution_id == Institution.id)
+        .where(
+            MonthlySnapshot.user_id == user_id,
+            MonthlySnapshot.snapshot_date <= target_date,
+            Project.is_active.is_(True),
+            Account.is_active.is_(True),
+            Institution.is_active.is_(True),
+        )
+    )
+    earliest_debt = db.scalar(
+        select(func.min(DebtEvent.event_date)).where(
+            DebtEvent.user_id == user_id,
+            DebtEvent.event_date <= target_date,
+        )
+    )
+    candidates = [item for item in (earliest_snapshot, earliest_debt) if item]
+    return min(candidates) if candidates else None
+
+
+def _trend_dates(
+    db: Session,
+    user_id: uuid.UUID,
+    target_date: date,
+    trend_range: TrendRange,
+) -> list[date]:
+    if trend_range != "all":
+        return _trend_cutoffs(target_date, 12 if trend_range == "12m" else 24)
+    earliest = _earliest_dashboard_date(db, user_id, target_date)
+    if earliest is None:
+        return [target_date]
+    month_count = (target_date.year - earliest.year) * 12 + target_date.month - earliest.month + 1
+    return _trend_cutoffs(target_date, month_count)
 
 
 def _debt_values(
@@ -191,7 +235,12 @@ def _net_worth_value(db: Session, user_id: uuid.UUID, target_date: date) -> Deci
     return project_assets + receivable - payable
 
 
-def dashboard_charts(db: Session, user_id: uuid.UUID, target_date: date) -> DashboardCharts:
+def dashboard_charts(
+    db: Session,
+    user_id: uuid.UUID,
+    target_date: date,
+    trend_range: TrendRange = "12m",
+) -> DashboardCharts:
     rows = _active_snapshot_rows(db, user_id, target_date, positive_only=True)
     asset_types: dict[str, Decimal] = defaultdict(Decimal)
     liquidity: dict[str, Decimal] = defaultdict(Decimal)
@@ -213,7 +262,7 @@ def dashboard_charts(db: Session, user_id: uuid.UUID, target_date: date) -> Dash
 
     trend = [
         TrendPoint(date=item, value=_net_worth_value(db, user_id, item))
-        for item in _trend_cutoffs(target_date)
+        for item in _trend_dates(db, user_id, target_date, trend_range)
     ]
     previous = {
         item.project_id: item.converted_amount_cny

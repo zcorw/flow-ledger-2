@@ -6,6 +6,7 @@ export type DashboardSummary = {
   foreign_asset_ratio: string; fx_warnings: string[];
 };
 export type ChartPoint = { name: string; value: string };
+export type TrendRange = '12m' | '24m' | 'all';
 export type DashboardCharts = {
   trend: { date: string; value: string }[]; asset_composition: ChartPoint[];
   liquidity_distribution: ChartPoint[]; risk_distribution: ChartPoint[];
@@ -14,4 +15,4 @@ export type DashboardCharts = {
 };
 
 export const getDashboardSummary = (date: string) => apiRequest<DashboardSummary>(`/dashboard/summary?snapshotDate=${date}`);
-export const getDashboardCharts = (date: string) => apiRequest<DashboardCharts>(`/dashboard/charts?snapshotDate=${date}`);
+export const getDashboardCharts = (date: string, trendRange: TrendRange = '12m') => apiRequest<DashboardCharts>(`/dashboard/charts?snapshotDate=${date}&trendRange=${trendRange}`);

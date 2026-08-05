@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import CurrentAuthDependency
 from app.db.session import get_db
 from app.schemas.dashboard import DashboardCharts, DashboardSummary
-from app.services.dashboard import dashboard_charts, dashboard_summary
+from app.services.dashboard import TrendRange, dashboard_charts, dashboard_summary
 
 router = APIRouter()
 DbDependency = Annotated[Session, Depends(get_db)]
@@ -27,5 +27,6 @@ def charts(
     auth: CurrentAuthDependency,
     db: DbDependency,
     snapshot_date: Annotated[date, Query(alias="snapshotDate")],
+    trend_range: Annotated[TrendRange, Query(alias="trendRange")] = "12m",
 ) -> DashboardCharts:
-    return dashboard_charts(db, auth.user.id, snapshot_date)
+    return dashboard_charts(db, auth.user.id, snapshot_date, trend_range)
