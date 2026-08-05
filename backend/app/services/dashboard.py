@@ -22,13 +22,14 @@ from app.services.fx import resolve_rate
 TrendRange = Literal["12m", "24m", "all"]
 
 
-def _active_snapshot_rows(
+def _monthly_snapshot_rows(
     db: Session,
     user_id: uuid.UUID,
     target_date: date,
     *,
     positive_only: bool = False,
 ):
+    month_start = target_date.replace(day=1)
     ranked_snapshots = (
         select(
             MonthlySnapshot.id.label("snapshot_id"),
@@ -41,6 +42,7 @@ def _active_snapshot_rows(
         )
         .where(
             MonthlySnapshot.user_id == user_id,
+            MonthlySnapshot.snapshot_date >= month_start,
             MonthlySnapshot.snapshot_date <= target_date,
         )
         .subquery()
@@ -183,7 +185,7 @@ def _debt_values(
 def dashboard_summary(
     db: Session, user_id: uuid.UUID, target_date: date, *, include_change: bool = True
 ) -> DashboardSummary:
-    rows = _active_snapshot_rows(db, user_id, target_date, positive_only=True)
+    rows = _monthly_snapshot_rows(db, user_id, target_date, positive_only=True)
     positive = [snapshot for snapshot, _project, _account, _institution in rows]
     project_assets = sum((item.converted_amount_cny for item in positive), Decimal("0"))
     receivable, payable, debt_currencies, debt_warnings = _debt_values(db, user_id, target_date)
@@ -197,7 +199,7 @@ def dashboard_summary(
     )
     previous_date = _previous_month_end(target_date)
     previous_change = None
-    if include_change and _active_snapshot_rows(db, user_id, previous_date):
+    if include_change and _monthly_snapshot_rows(db, user_id, previous_date):
         previous = dashboard_summary(db, user_id, previous_date, include_change=False)
         previous_change = total_assets - payable - previous.net_worth_cny
     warnings = debt_warnings + [
@@ -225,7 +227,7 @@ def _net_worth_value(db: Session, user_id: uuid.UUID, target_date: date) -> Deci
     project_assets = sum(
         (
             snapshot.converted_amount_cny
-            for snapshot, _project, _account, _institution in _active_snapshot_rows(
+            for snapshot, _project, _account, _institution in _monthly_snapshot_rows(
                 db, user_id, target_date, positive_only=True
             )
         ),
@@ -241,7 +243,7 @@ def dashboard_charts(
     target_date: date,
     trend_range: TrendRange = "12m",
 ) -> DashboardCharts:
-    rows = _active_snapshot_rows(db, user_id, target_date, positive_only=True)
+    rows = _monthly_snapshot_rows(db, user_id, target_date, positive_only=True)
     asset_types: dict[str, Decimal] = defaultdict(Decimal)
     liquidity: dict[str, Decimal] = defaultdict(Decimal)
     risk: dict[str, Decimal] = defaultdict(Decimal)
@@ -266,7 +268,7 @@ def dashboard_charts(
     ]
     previous = {
         item.project_id: item.converted_amount_cny
-        for item, _project, _account, _institution in _active_snapshot_rows(
+        for item, _project, _account, _institution in _monthly_snapshot_rows(
             db, user_id, _previous_month_end(target_date)
         )
     }

@@ -140,7 +140,7 @@ def test_dashboard_accounting_rules_and_charts(client: TestClient) -> None:
     assert charts["project_changes"][0]["project_name"] == "USD Fund"
 
 
-def test_dashboard_uses_latest_active_snapshot_as_of_selected_date(
+def test_dashboard_uses_latest_active_snapshot_within_each_month(
     client: TestClient,
 ) -> None:
     cny_id, usd_id, _negative_id = bootstrap(client)
@@ -176,12 +176,26 @@ def test_dashboard_uses_latest_active_snapshot_as_of_selected_date(
         ).status_code
         == 200
     )
+    assert (
+        client.put(
+            "/api/v1/snapshots/bulk",
+            json={"snapshotDate": "2026-08-01", "rows": [snapshot_row(cny_id, "1250")]},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.put(
+            "/api/v1/snapshots/bulk",
+            json={"snapshotDate": "2026-08-05", "rows": [snapshot_row(cny_id, "1300")]},
+        ).status_code
+        == 200
+    )
 
     summary = client.get("/api/v1/dashboard/summary", params={"snapshotDate": "2026-08-05"})
     assert summary.status_code == 200
-    assert summary.json()["total_assets_cny"] == "1900.000000"
-    assert summary.json()["net_worth_cny"] == "1900.000000"
-    assert summary.json()["net_worth_change_from_previous_month_cny"] == "0.000000"
+    assert summary.json()["total_assets_cny"] == "1300.000000"
+    assert summary.json()["net_worth_cny"] == "1300.000000"
+    assert summary.json()["net_worth_change_from_previous_month_cny"] == "100.000000"
 
     charts = client.get(
         "/api/v1/dashboard/charts", params={"snapshotDate": "2026-08-05"}
@@ -189,11 +203,11 @@ def test_dashboard_uses_latest_active_snapshot_as_of_selected_date(
     assert len(charts["trend"]) == 12
     assert charts["trend"][-3:] == [
         {"date": "2026-06-30", "value": "1700.000000"},
-        {"date": "2026-07-31", "value": "1900.000000"},
-        {"date": "2026-08-05", "value": "1900.000000"},
+        {"date": "2026-07-31", "value": "1200.000000"},
+        {"date": "2026-08-05", "value": "1300.000000"},
     ]
     assert charts["top_institutions"] == [
-        {"name": "Dashboard Bank", "value": "1900.000000"}
+        {"name": "Dashboard Bank", "value": "1300.000000"}
     ]
 
     charts_24_months = client.get(
@@ -203,7 +217,7 @@ def test_dashboard_uses_latest_active_snapshot_as_of_selected_date(
     assert len(charts_24_months["trend"]) == 24
     assert charts_24_months["trend"][-1] == {
         "date": "2026-08-05",
-        "value": "1900.000000",
+        "value": "1300.000000",
     }
 
     charts_all = client.get(
@@ -212,8 +226,8 @@ def test_dashboard_uses_latest_active_snapshot_as_of_selected_date(
     ).json()
     assert charts_all["trend"] == [
         {"date": "2026-06-30", "value": "1700.000000"},
-        {"date": "2026-07-31", "value": "1900.000000"},
-        {"date": "2026-08-05", "value": "1900.000000"},
+        {"date": "2026-07-31", "value": "1200.000000"},
+        {"date": "2026-08-05", "value": "1300.000000"},
     ]
     assert (
         client.get(
@@ -227,12 +241,12 @@ def test_dashboard_uses_latest_active_snapshot_as_of_selected_date(
     hidden_summary = client.get(
         "/api/v1/dashboard/summary", params={"snapshotDate": "2026-08-05"}
     ).json()
-    assert hidden_summary["total_assets_cny"] == "1200.000000"
+    assert hidden_summary["total_assets_cny"] == "1300.000000"
     hidden_charts = client.get(
         "/api/v1/dashboard/charts", params={"snapshotDate": "2026-08-05"}
     ).json()
     assert hidden_charts["trend"][-3:] == [
         {"date": "2026-06-30", "value": "1000.000000"},
         {"date": "2026-07-31", "value": "1200.000000"},
-        {"date": "2026-08-05", "value": "1200.000000"},
+        {"date": "2026-08-05", "value": "1300.000000"},
     ]
