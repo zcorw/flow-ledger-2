@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 from decimal import Decimal
 
@@ -360,3 +361,107 @@ def test_history_uses_current_hierarchy_and_keeps_inactive_records_visible(
         params={"level": "institution", "entityId": corrected_institution["id"]},
     ).json()
     assert len(inactive_history["rows"]) == 2
+
+
+def test_update_single_snapshot_date_amount_rate_and_conflict(client: TestClient) -> None:
+    _, usd_id, _, _ = bootstrap_hierarchy(client)
+    with get_session_factory()() as db:
+        db.add_all(
+            [
+                FxRate(
+                    base_currency="CNY",
+                    quote_currency="USD",
+                    rate_date=date(2026, 7, 31),
+                    rate_to_base=Decimal("7.0000000000"),
+                    source="test",
+                ),
+                FxRate(
+                    base_currency="CNY",
+                    quote_currency="USD",
+                    rate_date=date(2026, 8, 31),
+                    rate_to_base=Decimal("7.2000000000"),
+                    source="test",
+                ),
+            ]
+        )
+        db.commit()
+
+    def save(snapshot_date: str, amount: str) -> None:
+        response = client.put(
+            "/api/v1/snapshots/bulk",
+            json={
+                "snapshotDate": snapshot_date,
+                "rows": [
+                    {
+                        "projectId": usd_id,
+                        "originalAmount": amount,
+                        "liquidityLevel": "within_7d",
+                        "riskLevel": "medium",
+                    }
+                ],
+            },
+        )
+        assert response.status_code == 200
+
+    save("2026-07-31", "100")
+    save("2026-09-30", "50")
+    history = client.get(
+        "/api/v1/snapshots/history",
+        params={"level": "project", "entityId": usd_id},
+    ).json()
+    july = next(row for row in history["rows"] if row["snapshot_date"] == "2026-07-31")
+
+    updated = client.patch(
+        f"/api/v1/snapshots/{july['id']}",
+        json={"snapshotDate": "2026-08-31", "originalAmount": "125.00"},
+    )
+    assert updated.status_code == 200
+    assert updated.json() == {
+        "id": july["id"],
+        "project_id": usd_id,
+        "snapshot_date": "2026-08-31",
+        "currency_code": "USD",
+        "original_amount": "125.000000",
+        "converted_amount_cny": "900.000000",
+        "fx_rate_to_cny": "7.2000000000",
+        "fx_is_stale": False,
+    }
+
+    refreshed = client.get(
+        "/api/v1/snapshots/history",
+        params={"level": "project", "entityId": usd_id},
+    ).json()
+    assert {row["snapshot_date"] for row in refreshed["rows"]} == {
+        "2026-08-31",
+        "2026-09-30",
+    }
+    assert next(
+        row for row in refreshed["rows"] if row["snapshot_date"] == "2026-08-31"
+    )["converted_amount_cny"] == "900.000000"
+
+    conflict = client.patch(
+        f"/api/v1/snapshots/{july['id']}",
+        json={"snapshotDate": "2026-09-30", "originalAmount": "130"},
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["error"]["code"] == "SNAPSHOT_DATE_CONFLICT"
+
+    missing = client.patch(
+        "/api/v1/snapshots/00000000-0000-0000-0000-000000000000",
+        json={"snapshotDate": "2026-08-31", "originalAmount": "1"},
+    )
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "SNAPSHOT_NOT_FOUND"
+
+    with get_session_factory()() as db:
+        audit = db.scalar(
+            select(AuditLog)
+            .where(
+                AuditLog.action == "snapshot.update",
+                AuditLog.entity_id == uuid.UUID(july["id"]),
+            )
+            .order_by(AuditLog.created_at.desc())
+        )
+        assert audit is not None
+        assert audit.before_data["snapshotDate"] == "2026-07-31"
+        assert audit.after_data["snapshotDate"] == "2026-08-31"

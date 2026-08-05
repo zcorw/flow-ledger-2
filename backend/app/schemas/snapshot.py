@@ -25,6 +25,22 @@ class CopyPreviousRequest(BaseModel):
     target_date: date = Field(alias="targetDate")
 
 
+class SnapshotUpdateRequest(BaseModel):
+    snapshot_date: date = Field(alias="snapshotDate")
+    original_amount: Decimal = Field(alias="originalAmount", max_digits=20, decimal_places=6)
+
+
+class SnapshotUpdateResponse(BaseModel):
+    id: uuid.UUID
+    project_id: uuid.UUID
+    snapshot_date: date
+    currency_code: str
+    original_amount: Decimal
+    converted_amount_cny: Decimal
+    fx_rate_to_cny: Decimal
+    fx_is_stale: bool
+
+
 class SnapshotRowResponse(BaseModel):
     id: uuid.UUID | None
     project_id: uuid.UUID

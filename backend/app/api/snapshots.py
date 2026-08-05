@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import CurrentAuthDependency
@@ -24,6 +25,8 @@ from app.schemas.snapshot import (
     SnapshotHistoryTrendPoint,
     SnapshotRowResponse,
     SnapshotSheetResponse,
+    SnapshotUpdateRequest,
+    SnapshotUpdateResponse,
     SnapshotWarning,
 )
 from app.services.fx import enabled_currency_codes, resolve_rate
@@ -483,3 +486,70 @@ def save_bulk(
         )
     db.commit()
     return _sheet(db, auth.user.id, payload.snapshot_date)
+
+
+@router.patch("/{snapshot_id}", response_model=SnapshotUpdateResponse)
+def update_snapshot(
+    snapshot_id: uuid.UUID,
+    payload: SnapshotUpdateRequest,
+    auth: CurrentAuthDependency,
+    db: DbDependency,
+) -> MonthlySnapshot:
+    item = db.scalar(
+        select(MonthlySnapshot).where(
+            MonthlySnapshot.id == snapshot_id,
+            MonthlySnapshot.user_id == auth.user.id,
+        )
+    )
+    if item is None:
+        raise ApiError(404, "SNAPSHOT_NOT_FOUND", "快照不存在")
+    conflict = db.scalar(
+        select(MonthlySnapshot.id).where(
+            MonthlySnapshot.project_id == item.project_id,
+            MonthlySnapshot.snapshot_date == payload.snapshot_date,
+            MonthlySnapshot.id != item.id,
+        )
+    )
+    if conflict is not None:
+        raise ApiError(409, "SNAPSHOT_DATE_CONFLICT", "该项目在目标日期已有快照")
+    project = db.scalar(
+        select(Project).where(
+            Project.id == item.project_id,
+            Project.user_id == auth.user.id,
+        )
+    )
+    if project is None:
+        raise ApiError(404, "PROJECT_NOT_FOUND", "项目不存在")
+    resolution = resolve_rate(db, project.currency_code, payload.snapshot_date)
+    before = _snapshot_audit_data(item)
+    item.snapshot_date = payload.snapshot_date
+    item.snapshot_month = payload.snapshot_date.strftime("%Y-%m")
+    item.original_amount = payload.original_amount
+    item.currency_code = project.currency_code
+    item.fx_rate_id = resolution.fx_rate_id
+    item.fx_rate_to_cny = resolution.rate_to_cny
+    item.fx_is_stale = resolution.is_stale
+    item.converted_amount_cny = (payload.original_amount * resolution.rate_to_cny).quantize(
+        MONEY_QUANTIZER, rounding=ROUND_HALF_UP
+    )
+    db.add(
+        AuditLog(
+            user_id=auth.user.id,
+            action="snapshot.update",
+            entity_type="monthly_snapshot",
+            entity_id=item.id,
+            before_data=before,
+            after_data=_snapshot_audit_data(item),
+        )
+    )
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise ApiError(
+            409,
+            "SNAPSHOT_DATE_CONFLICT",
+            "该项目在目标日期已有快照",
+        ) from exc
+    db.refresh(item)
+    return item
