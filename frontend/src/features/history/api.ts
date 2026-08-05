@@ -37,6 +37,22 @@ export type SnapshotHistory = {
   rows: SnapshotHistoryRow[];
 };
 
+export type SnapshotUpdatePayload = {
+  snapshotDate: string;
+  originalAmount: string;
+};
+
+export type SnapshotUpdateResponse = {
+  id: string;
+  project_id: string;
+  snapshot_date: string;
+  currency_code: string;
+  original_amount: string;
+  converted_amount_cny: string;
+  fx_rate_to_cny: string;
+  fx_is_stale: boolean;
+};
+
 export function getSnapshotHistory(
   level: HistoryLevel,
   entityId: string,
@@ -47,4 +63,11 @@ export function getSnapshotHistory(
   if (dateFrom) params.set('dateFrom', dateFrom);
   if (dateTo) params.set('dateTo', dateTo);
   return apiRequest<SnapshotHistory>(`/snapshots/history?${params.toString()}`);
+}
+
+export function updateSnapshot(snapshotId: string, payload: SnapshotUpdatePayload) {
+  return apiRequest<SnapshotUpdateResponse>(`/snapshots/${snapshotId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
 }

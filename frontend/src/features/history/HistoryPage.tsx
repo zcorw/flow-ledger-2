@@ -1,18 +1,23 @@
 import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined';
 import DownloadOutlined from '@mui/icons-material/DownloadOutlined';
+import EditOutlined from '@mui/icons-material/EditOutlined';
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined';
 import {
   Alert, Box, Button, ButtonGroup, Chip, Paper, Skeleton, Stack, TextField,
   Typography,
 } from '@mui/material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { EChartsCoreOption } from 'echarts/core';
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../../api/client';
 import { EChart } from '../dashboard/EChart';
-import { getSnapshotHistory, type HistoryLevel, type SnapshotHistoryRow } from './api';
+import {
+  getSnapshotHistory, updateSnapshot, type HistoryLevel, type SnapshotHistoryRow,
+  type SnapshotUpdatePayload,
+} from './api';
+import { EditSnapshotDialog } from './EditSnapshotDialog';
 import { buildHistoryCsv } from './export';
 
 const cny = new Intl.NumberFormat('zh-CN', {
@@ -50,6 +55,7 @@ function KpiCard({ title, value, detail }: { title: string; value: string; detai
 
 export function HistoryPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const rawLevel = searchParams.get('level');
   const entityId = searchParams.get('entityId') ?? '';
@@ -58,6 +64,8 @@ export function HistoryPage() {
     : null) as HistoryLevel | null;
   const [dateFrom, setDateFrom] = useState(() => monthsAgo(12));
   const [dateTo, setDateTo] = useState(today);
+  const [editingRow, setEditingRow] = useState<SnapshotHistoryRow | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const historyQuery = useQuery({
     queryKey: ['snapshot-history', level, entityId, dateFrom, dateTo],
     queryFn: () => getSnapshotHistory(level as HistoryLevel, entityId, dateFrom, dateTo),
@@ -65,6 +73,22 @@ export function HistoryPage() {
     placeholderData: keepPreviousData,
   });
   const history = historyQuery.data;
+  const updateMutation = useMutation({
+    mutationFn: ({ snapshotId, payload }: { snapshotId: string; payload: SnapshotUpdatePayload }) => (
+      updateSnapshot(snapshotId, payload)
+    ),
+    onSuccess: async () => {
+      setEditingRow(null);
+      setNotice('月度快照已更新');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['snapshot-history'] }),
+        queryClient.invalidateQueries({ queryKey: ['snapshots'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-charts'] }),
+      ]);
+    },
+  });
+  const resetUpdateMutation = updateMutation.reset;
 
   const trendOption = useMemo((): EChartsCoreOption | null => history ? ({
     tooltip: {
@@ -114,7 +138,28 @@ export function HistoryPage() {
     { field: 'change_percent', headerName: '变化比例', width: 105, valueFormatter: (value) => value == null ? '—' : `${(Number(value) * 100).toFixed(1)}%` },
     { field: 'fx_is_stale', headerName: '汇率状态', width: 105, renderCell: ({ value }) => <Chip size="small" color={value ? 'warning' : 'success'} label={value ? '历史' : '当日'} /> },
     { field: 'change_note', headerName: '备注', minWidth: 180, flex: 1, valueFormatter: (value) => value || '—' },
-  ], []);
+    {
+      field: 'actions',
+      headerName: '操作',
+      width: 94,
+      sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
+      renderCell: ({ row }) => (
+        <Button
+          size="small"
+          startIcon={<EditOutlined />}
+          onClick={() => {
+            resetUpdateMutation();
+            setNotice(null);
+            setEditingRow(row);
+          }}
+        >
+          编辑
+        </Button>
+      ),
+    },
+  ], [resetUpdateMutation]);
 
   const setQuickRange = (months: number | null) => {
     setDateFrom(months === null ? '' : monthsAgo(months));
@@ -151,6 +196,7 @@ export function HistoryPage() {
   return (
     <Box>
       <Button startIcon={<ArrowBackOutlined />} onClick={() => navigate('/institutions')} sx={{ mb: 2 }}>返回机构与账户</Button>
+      {notice && <Alert severity="success" onClose={() => setNotice(null)} sx={{ mb: 2 }}>{notice}</Alert>}
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { lg: 'flex-start' }, mb: 3 }}>
         <Box>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
@@ -194,6 +240,16 @@ export function HistoryPage() {
           ? <Paper variant="outlined" sx={{ mt: 2, p: 6, textAlign: 'center', borderRadius: 2.5 }}><HistoryOutlined color="disabled" sx={{ fontSize: 44 }} /><Typography sx={{ mt: 1, fontWeight: 700 }}>当前范围内没有历史快照</Typography><Typography color="text.secondary">可调整时间范围，或先在月度快照中录入数据。</Typography></Paper>
           : <Paper variant="outlined" sx={{ mt: 2, height: 560, borderRadius: 2.5, overflow: 'hidden' }}><DataGrid aria-label={`${history.entity_name}历史快照明细`} rows={history.rows} columns={columns} getRowId={(row) => row.id} disableRowSelectionOnClick showToolbar initialState={{ pagination: { paginationModel: { page: 0, pageSize: 25 } }, columns: { columnVisibilityModel: { institution_name: level === 'institution', account_name: level !== 'project', project_name: level !== 'project' } } }} pageSizeOptions={[25, 50, 100]} /></Paper>}
       </>}
+      <EditSnapshotDialog
+        row={editingRow}
+        saving={updateMutation.isPending}
+        errorMessage={updateMutation.error instanceof Error ? updateMutation.error.message : null}
+        onClose={() => {
+          updateMutation.reset();
+          setEditingRow(null);
+        }}
+        onSubmit={(snapshotId, payload) => updateMutation.mutate({ snapshotId, payload })}
+      />
     </Box>
   );
 }
