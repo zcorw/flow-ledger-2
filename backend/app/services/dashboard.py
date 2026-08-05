@@ -1,6 +1,6 @@
 import uuid
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import and_, case, func, select
@@ -17,6 +17,73 @@ from app.schemas.dashboard import (
     TrendPoint,
 )
 from app.services.fx import resolve_rate
+
+
+def _active_snapshot_rows(
+    db: Session,
+    user_id: uuid.UUID,
+    target_date: date,
+    *,
+    positive_only: bool = False,
+):
+    ranked_snapshots = (
+        select(
+            MonthlySnapshot.id.label("snapshot_id"),
+            func.row_number()
+            .over(
+                partition_by=MonthlySnapshot.project_id,
+                order_by=MonthlySnapshot.snapshot_date.desc(),
+            )
+            .label("position"),
+        )
+        .where(
+            MonthlySnapshot.user_id == user_id,
+            MonthlySnapshot.snapshot_date <= target_date,
+        )
+        .subquery()
+    )
+    statement = (
+        select(MonthlySnapshot, Project, Account, Institution)
+        .join(
+            ranked_snapshots,
+            MonthlySnapshot.id == ranked_snapshots.c.snapshot_id,
+        )
+        .join(Project, MonthlySnapshot.project_id == Project.id)
+        .join(Account, Project.account_id == Account.id)
+        .join(Institution, Account.institution_id == Institution.id)
+        .where(
+            ranked_snapshots.c.position == 1,
+            Project.is_active.is_(True),
+            Account.is_active.is_(True),
+            Institution.is_active.is_(True),
+        )
+    )
+    if positive_only:
+        statement = statement.where(MonthlySnapshot.converted_amount_cny > 0)
+    return list(db.execute(statement))
+
+
+def _shift_month(value: date, offset: int) -> date:
+    month_index = value.year * 12 + value.month - 1 + offset
+    year, month = divmod(month_index, 12)
+    return date(year, month + 1, 1)
+
+
+def _previous_month_end(value: date) -> date:
+    return value.replace(day=1) - timedelta(days=1)
+
+
+def _trend_cutoffs(target_date: date, count: int = 12) -> list[date]:
+    current_month = target_date.replace(day=1)
+    cutoffs = []
+    for offset in range(-(count - 1), 1):
+        month_start = _shift_month(current_month, offset)
+        cutoffs.append(
+            target_date
+            if offset == 0
+            else _shift_month(month_start, 1) - timedelta(days=1)
+        )
+    return cutoffs
 
 
 def _debt_values(
@@ -72,15 +139,8 @@ def _debt_values(
 def dashboard_summary(
     db: Session, user_id: uuid.UUID, target_date: date, *, include_change: bool = True
 ) -> DashboardSummary:
-    snapshots = list(
-        db.scalars(
-            select(MonthlySnapshot).where(
-                MonthlySnapshot.user_id == user_id,
-                MonthlySnapshot.snapshot_date == target_date,
-            )
-        )
-    )
-    positive = [item for item in snapshots if item.converted_amount_cny > 0]
+    rows = _active_snapshot_rows(db, user_id, target_date, positive_only=True)
+    positive = [snapshot for snapshot, _project, _account, _institution in rows]
     project_assets = sum((item.converted_amount_cny for item in positive), Decimal("0"))
     receivable, payable, debt_currencies, debt_warnings = _debt_values(db, user_id, target_date)
     total_assets = project_assets + receivable
@@ -91,14 +151,9 @@ def dashboard_summary(
         (value for currency, value in debt_currencies.items() if currency != "CNY"),
         Decimal("0"),
     )
-    previous_date = db.scalar(
-        select(func.max(MonthlySnapshot.snapshot_date)).where(
-            MonthlySnapshot.user_id == user_id,
-            MonthlySnapshot.snapshot_date < target_date,
-        )
-    )
+    previous_date = _previous_month_end(target_date)
     previous_change = None
-    if include_change and previous_date:
+    if include_change and _active_snapshot_rows(db, user_id, previous_date):
         previous = dashboard_summary(db, user_id, previous_date, include_change=False)
         previous_change = total_assets - payable - previous.net_worth_cny
     warnings = debt_warnings + [
@@ -123,31 +178,21 @@ def _points(values: dict[str, Decimal]) -> list[ChartPoint]:
 
 
 def _net_worth_value(db: Session, user_id: uuid.UUID, target_date: date) -> Decimal:
-    project_assets = db.scalar(
-        select(func.coalesce(func.sum(MonthlySnapshot.converted_amount_cny), Decimal("0"))).where(
-            MonthlySnapshot.user_id == user_id,
-            MonthlySnapshot.snapshot_date == target_date,
-            MonthlySnapshot.converted_amount_cny > 0,
-        )
+    project_assets = sum(
+        (
+            snapshot.converted_amount_cny
+            for snapshot, _project, _account, _institution in _active_snapshot_rows(
+                db, user_id, target_date, positive_only=True
+            )
+        ),
+        Decimal("0"),
     )
     receivable, payable, _, _ = _debt_values(db, user_id, target_date)
     return project_assets + receivable - payable
 
 
 def dashboard_charts(db: Session, user_id: uuid.UUID, target_date: date) -> DashboardCharts:
-    rows = list(
-        db.execute(
-            select(MonthlySnapshot, Project, Account, Institution)
-            .join(Project, MonthlySnapshot.project_id == Project.id)
-            .join(Account, Project.account_id == Account.id)
-            .join(Institution, Account.institution_id == Institution.id)
-            .where(
-                MonthlySnapshot.user_id == user_id,
-                MonthlySnapshot.snapshot_date == target_date,
-                MonthlySnapshot.converted_amount_cny > 0,
-            )
-        )
-    )
+    rows = _active_snapshot_rows(db, user_id, target_date, positive_only=True)
     asset_types: dict[str, Decimal] = defaultdict(Decimal)
     liquidity: dict[str, Decimal] = defaultdict(Decimal)
     risk: dict[str, Decimal] = defaultdict(Decimal)
@@ -166,40 +211,16 @@ def dashboard_charts(db: Session, user_id: uuid.UUID, target_date: date) -> Dash
         for currency, value in debt_currencies.items():
             currencies[currency] += value
 
-    dates = list(
-        db.scalars(
-            select(MonthlySnapshot.snapshot_date)
-            .where(
-                MonthlySnapshot.user_id == user_id,
-                MonthlySnapshot.snapshot_date <= target_date,
-            )
-            .distinct()
-            .order_by(MonthlySnapshot.snapshot_date.desc())
-            .limit(12)
-        )
-    )
     trend = [
-        TrendPoint(date=item, value=_net_worth_value(db, user_id, item)) for item in reversed(dates)
+        TrendPoint(date=item, value=_net_worth_value(db, user_id, item))
+        for item in _trend_cutoffs(target_date)
     ]
-    previous_date = db.scalar(
-        select(func.max(MonthlySnapshot.snapshot_date)).where(
-            MonthlySnapshot.user_id == user_id,
-            MonthlySnapshot.snapshot_date < target_date,
+    previous = {
+        item.project_id: item.converted_amount_cny
+        for item, _project, _account, _institution in _active_snapshot_rows(
+            db, user_id, _previous_month_end(target_date)
         )
-    )
-    previous = (
-        {
-            item.project_id: item.converted_amount_cny
-            for item in db.scalars(
-                select(MonthlySnapshot).where(
-                    MonthlySnapshot.user_id == user_id,
-                    MonthlySnapshot.snapshot_date == previous_date,
-                )
-            )
-        }
-        if previous_date
-        else {}
-    )
+    }
     changes = sorted(
         [
             ProjectChangePoint(
