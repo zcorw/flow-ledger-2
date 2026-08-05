@@ -84,6 +84,8 @@ API 前缀：`/api/v1`
 
 ### GET /dashboard/summary?snapshotDate=2026-07-31
 
+项目资产按截至 `snapshotDate` 的口径聚合：每个当前启用且上级账户、机构均启用的项目取不晚于该日期的最后一条快照。较上月变化与上一个自然月月末比较，而不是与上一条零散快照日期比较。
+
 返回：
 
 ```json
@@ -98,9 +100,11 @@ API 前缀：`/api/v1`
 }
 ```
 
-### GET /dashboard/charts?snapshotDate=2026-07-31
+### GET /dashboard/charts?snapshotDate=2026-07-31&trendRange=12m
 
-返回净资产趋势、资产组成、流动性、风险、币种、Top 5 机构和金额变化数据。
+返回净资产趋势、资产组成、流动性、风险、币种、Top 5 机构和金额变化数据。项目资产使用与 summary 相同的截至日期和启用状态规则。
+
+`trendRange` 可取 `12m`、`24m` 或 `all`，默认 `12m`。趋势按自然月月末聚合，当前月份的最后一点使用 `snapshotDate`；`all` 从最早一条当前可见的项目快照或债权债务事件所在月份开始。
 
 ## 4. 币种和汇率
 
