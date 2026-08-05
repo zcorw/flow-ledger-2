@@ -10,7 +10,7 @@ MVP 部署到一台 VPS，使用 Docker Compose 管理全部服务。
 - backend：FastAPI API
 - scheduler：APScheduler 定时任务
 - postgres：Postgres 数据库
-- nginx 或 caddy：反向代理和 TLS
+- 可选容器 Caddy，或由宿主机 Nginx、Traefik 等外部工具负责反向代理和 TLS
 
 ## 2. 环境变量
 
@@ -19,6 +19,7 @@ MVP 部署到一台 VPS，使用 Docker Compose 管理全部服务。
 ```env
 APP_ENV=production
 APP_BASE_URL=https://your-domain.example
+PROXY_MODE=caddy
 DATABASE_URL=postgresql+psycopg://app:password@postgres:5432/asset_app
 SECRET_KEY=replace-with-long-random-secret
 BOOTSTRAP_TOKEN=replace-with-one-time-random-token
@@ -38,53 +39,17 @@ BACKUP_DIR=/var/backups/asset-app
 5. 创建完成后 `/setup` 入口失效。
 6. 初始化成功后建议从 VPS 环境变量中移除或轮换 `BOOTSTRAP_TOKEN`。
 
-## 3. Docker Compose 草案
+## 3. Docker Compose 结构
 
-```yaml
-services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: asset_app
-      POSTGRES_USER: app
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app -d asset_app"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+生产环境使用一份基础配置和一份入口叠加配置：
 
-  backend:
-    build:
-      context: ./backend
-    env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - "8000:8000"
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+- `deploy/compose.production.yml`：PostgreSQL、迁移、后端、scheduler、前端和备份。
+- `deploy/compose.caddy.yml`：增加容器 Caddy，并发布宿主机 80/443。
+- `deploy/compose.external-proxy.yml`：不启动 Caddy，只将前端发布到 `127.0.0.1:${EXTERNAL_PROXY_PORT}`。
 
-  scheduler:
-    build:
-      context: ./backend
-    env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: ["python", "-m", "app.scheduler"]
+`deploy/compose.sh` 根据 `PROXY_MODE=caddy|external` 自动选择叠加文件，部署、验证、备份和恢复命令都必须通过该脚本执行。未配置时默认 `caddy`，保证已有部署兼容。
 
-  frontend:
-    build:
-      context: ./frontend
-    ports:
-      - "3000:80"
-
-volumes:
-  postgres_data:
-```
+外部代理模式下，宿主机代理将全部请求转发到回环端口，前端容器内 Nginx 再将 `/api/*` 转发至 Docker 内部后端。PostgreSQL 和后端均不发布宿主机端口。
 
 ## 4. 数据库迁移
 
@@ -109,13 +74,13 @@ alembic upgrade head
 推荐流程：
 
 1. push 到 main。
-2. CI 执行前端 lint、typecheck、build。
-3. CI 执行后端 lint、test。
-4. 构建 Docker 镜像。
-5. SSH 到 VPS。
-6. 拉取最新代码或镜像。
-7. 执行数据库迁移。
-8. 重启 Docker Compose。
+2. CI 执行前端 lint、typecheck、test、build 和 bundle 检查。
+3. CI 执行后端 lint、test、覆盖率和迁移检查。
+4. CI 校验 Caddy 与外部代理两套 Compose 配置。
+5. CI 成功后部署工作流通过 SSH 登录 VPS。
+6. VPS 仓库快进到刚通过 CI 的准确提交。
+7. `deploy.sh` 根据 VPS 上的 `PROXY_MODE` 选择入口模式。
+8. 生成部署前备份、执行数据库迁移并重启服务。
 9. 调用 `/api/v1/system/health` 验证。
 
 ## 6. 备份
@@ -160,4 +125,3 @@ pg_dump "$DATABASE_URL" > "$BACKUP_DIR/asset-app-$(date +%F-%H%M%S).sql"
 - 导出备份需要登录
 - 恢复备份需要重新输入密码
 - 所有导入、导出、恢复操作写审计日志
-

@@ -32,7 +32,7 @@ Flow Ledger 是一个面向个人使用的私有资产管理 Web 应用。它以
 | 后端 | FastAPI、SQLAlchemy、Alembic、Pydantic |
 | 数据库 | PostgreSQL 16 |
 | 定时任务 | APScheduler |
-| 部署 | Docker Compose、Nginx；生产环境使用 Caddy 提供 TLS |
+| 部署 | Docker Compose、Nginx；生产入口可选容器 Caddy 或宿主机代理 |
 | 测试 | Vitest、Pytest、Playwright |
 
 ## 快速启动
@@ -195,7 +195,7 @@ Flow-Ledger2/
 ├── backend/                 FastAPI、数据模型、迁移和后端测试
 ├── frontend/                React 前端应用
 ├── e2e/                     Playwright 端到端测试
-├── deploy/                  生产 Compose、Caddy、备份和部署脚本
+├── deploy/                  生产 Compose、可选代理、备份和部署脚本
 ├── docs/                    产品、交互、数据模型、API 和运维文档
 ├── prototype/               静态页面与设计原型
 ├── scripts/                 工程检查脚本
@@ -205,9 +205,9 @@ Flow-Ledger2/
 
 ## 生产部署与备份
 
-根目录的 `docker-compose.yml` 用于本地开发和集成测试。生产环境请使用 [deploy/README.md](deploy/README.md) 中的部署方案，其中包含：
+根目录的 `docker-compose.yml` 用于本地开发和集成测试。生产环境请使用 [deploy/README.md](deploy/README.md) 中的部署方案。部署者可以通过 `PROXY_MODE=caddy` 自动启动容器 Caddy，也可以设置 `PROXY_MODE=external`，将应用交给宿主机已有的 Nginx、Traefik 或其他代理。
 
-- Caddy HTTPS 反向代理
+- 可选择的 Caddy 或外部代理入口
 - 生产环境变量校验
 - Alembic 数据库迁移
 - 健康检查
