@@ -44,6 +44,25 @@ jobs:
         env:
           DATABASE_URL: sqlite+pysqlite:///:memory:
 
+  deployment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deployment scripts
+        run: sh -n deploy/compose.sh deploy/deploy.sh deploy/verify.sh
+      - name: Validate Caddy deployment mode
+        run: >-
+          ENV_FILE=deploy/.env.production.example PROXY_MODE=caddy
+          sh deploy/compose.sh config --quiet
+      - name: Validate external proxy deployment mode
+        run: >-
+          ENV_FILE=deploy/.env.production.example PROXY_MODE=external
+          sh deploy/compose.sh config --quiet
+      - name: Reject an invalid proxy mode
+        run: >-
+          ! ENV_FILE=deploy/.env.production.example PROXY_MODE=invalid
+          sh deploy/compose.sh config --quiet
+
   e2e:
     runs-on: ubuntu-latest
     needs: [frontend, backend]
