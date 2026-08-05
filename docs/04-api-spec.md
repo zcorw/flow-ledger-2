@@ -259,6 +259,19 @@ API 前缀：`/api/v1`
 
 返回当前关联关系下的概览、趋势、最新一期下级构成和逐条快照明细。接口不按启用状态过滤；账户重新关联后，全部历史实时归入新机构。
 
+### PATCH /snapshots/{id}
+
+修改一条已有月度快照的日期和原币金额。
+
+```json
+{
+  "snapshotDate": "2026-08-31",
+  "originalAmount": "12500.00"
+}
+```
+
+保存时按目标日期重新匹配项目币种的历史汇率，更新 `snapshot_month` 和 CNY 折算金额，并写入修改前后的审计记录。同一项目在目标日期已有快照时返回 `409 SNAPSHOT_DATE_CONFLICT`；目标日期之前没有可用汇率时返回 `409 FX_RATE_MISSING`。
+
 ## 7. 债权债务
 
 ### GET /debts?type=receivable
