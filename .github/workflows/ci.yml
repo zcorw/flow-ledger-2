@@ -42,7 +42,7 @@ jobs:
       - run: alembic upgrade head
         working-directory: backend
         env:
-          DATABASE_URL: sqlite+pysqlite:///:memory:
+          DATABASE_URL: "sqlite+pysqlite:///:memory:"
 
   deployment:
     runs-on: ubuntu-latest
