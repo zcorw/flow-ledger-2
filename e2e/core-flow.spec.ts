@@ -224,6 +224,22 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await expect(page.getByText('当前未偿本金 CNY 7,000.00', { exact: true })).toBeVisible();
   await expect(page.getByText('部分偿还', { exact: true })).toBeVisible();
 
+  await page.getByRole('button', { name: '删除事件 还款 2099-01-02' }).click();
+  const deleteEventDialog = page.getByRole('dialog', { name: '删除单个事件？' });
+  await expect(deleteEventDialog.getByText('此操作不可撤销')).toBeVisible();
+  await deleteEventDialog.getByRole('button', { name: '确认删除事件' }).click();
+  await expect(deleteEventDialog).not.toBeVisible();
+  await expect(page.getByText('CNY 10,000.00', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('进行中', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: '删除对象' }).click();
+  const deleteDebtDialog = page.getByRole('dialog', { name: '删除债权对象？' });
+  await expect(deleteDebtDialog.getByText('高风险操作，不可撤销')).toBeVisible();
+  await expect(deleteDebtDialog.getByText(/全部 1 条事件/)).toBeVisible();
+  await deleteDebtDialog.getByRole('button', { name: '删除对象及全部事件' }).click();
+  await expect(deleteDebtDialog).not.toBeVisible();
+  await expect(page.getByText('E2E Future Friend', { exact: true })).not.toBeVisible();
+
   await page.getByRole('button', { name: '机构与账户' }).click();
   await page.getByRole('button', { name: '编辑机构 E2E Bank' }).click();
   const editInstitutionDialog = page.getByRole('dialog');

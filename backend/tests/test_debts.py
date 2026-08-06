@@ -1,9 +1,13 @@
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.db.session import get_session_factory
+from app.models.audit import AuditLog
+from app.models.debt import DebtEvent
 from app.models.fx import FxRate
 
 
@@ -108,6 +112,41 @@ def test_debt_list_uses_latest_recorded_event_balance(client: TestClient) -> Non
     ).json()["items"][0]
     assert Decimal(historical["balance"]) == 0
     assert historical["last_event_date"] is None
+
+
+def test_delete_event_recalculates_balance_and_delete_item_cascades(client: TestClient) -> None:
+    bootstrap(client)
+    debt_id = create_debt(client)
+    assert event(client, debt_id, "issue", "2026-07-01", "10000").status_code == 201
+    repayment = event(client, debt_id, "repayment", "2026-07-02", "3000")
+    assert repayment.status_code == 201
+
+    deleted_event = client.delete(
+        f"/api/v1/debts/{debt_id}/events/{repayment.json()['id']}"
+    )
+    assert deleted_event.status_code == 204
+    remaining_events = client.get(f"/api/v1/debts/{debt_id}/events").json()
+    assert len(remaining_events) == 1
+    item = client.get("/api/v1/debts", params={"type": "receivable"}).json()[0]
+    assert item["balance"] == "10000.000000"
+    assert item["status"] == "active"
+
+    deleted_item = client.delete(f"/api/v1/debts/{debt_id}")
+    assert deleted_item.status_code == 204
+    assert client.get("/api/v1/debts", params={"type": "receivable"}).json() == []
+    missing_events = client.get(f"/api/v1/debts/{debt_id}/events")
+    assert missing_events.status_code == 404
+
+    with get_session_factory()() as db:
+        assert (
+            db.scalar(
+                select(DebtEvent).where(DebtEvent.debt_item_id == uuid.UUID(debt_id))
+            )
+            is None
+        )
+        audit_actions = set(db.scalars(select(AuditLog.action)))
+        assert "debt.event.delete" in audit_actions
+        assert "debt.delete" in audit_actions
 
 
 def test_negative_rules_and_currency_conversion(client: TestClient) -> None:

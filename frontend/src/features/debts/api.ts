@@ -14,5 +14,7 @@ export type EventInput = { eventType: string; eventDate: string; amount: string;
 
 export const getDebts = (type: string) => apiRequest<DebtBalance[]>(`/debts?type=${type}`);
 export const createDebt = (value: DebtInput) => apiRequest<DebtBalance>('/debts', { method: 'POST', body: JSON.stringify(value) });
+export const deleteDebt = (id: string) => apiRequest<void>(`/debts/${id}`, { method: 'DELETE' });
 export const getDebtEvents = (id: string) => apiRequest<DebtEvent[]>(`/debts/${id}/events`);
 export const createDebtEvent = (id: string, value: EventInput) => apiRequest<DebtEvent>(`/debts/${id}/events`, { method: 'POST', body: JSON.stringify(value) });
+export const deleteDebtEvent = (debtId: string, eventId: string) => apiRequest<void>(`/debts/${debtId}/events/${eventId}`, { method: 'DELETE' });

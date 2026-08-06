@@ -3,8 +3,8 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Query, Response, status
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import CurrentAuthDependency
@@ -37,6 +37,41 @@ def _debt(db: Session, user_id: uuid.UUID, entity_id: uuid.UUID) -> DebtItem:
     if item is None:
         raise ApiError(404, "DEBT_NOT_FOUND", "债权债务项目不存在")
     return item
+
+
+def _debt_event(
+    db: Session,
+    user_id: uuid.UUID,
+    entity_id: uuid.UUID,
+    event_id: uuid.UUID,
+) -> DebtEvent:
+    _debt(db, user_id, entity_id)
+    event = db.scalar(
+        select(DebtEvent).where(
+            DebtEvent.id == event_id,
+            DebtEvent.debt_item_id == entity_id,
+            DebtEvent.user_id == user_id,
+        )
+    )
+    if event is None:
+        raise ApiError(404, "DEBT_EVENT_NOT_FOUND", "债权债务事件不存在")
+    return event
+
+
+def _sync_debt_status(db: Session, item: DebtItem) -> Decimal:
+    current_balance, _ = debt_balance_latest(db, item.id)
+    remaining_event_types = set(
+        db.scalars(select(DebtEvent.event_type).where(DebtEvent.debt_item_id == item.id))
+    )
+    if not remaining_event_types:
+        item.status = "active"
+    elif current_balance == 0:
+        item.status = "settled"
+    elif remaining_event_types.intersection({"repayment", "settle"}):
+        item.status = "partially_settled"
+    else:
+        item.status = "active"
+    return current_balance
 
 
 def _build_balance_response(
@@ -116,6 +151,50 @@ def create_debt(
     return _latest_balance_response(db, item)
 
 
+@router.delete("/{entity_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_debt(
+    entity_id: uuid.UUID,
+    auth: CurrentAuthDependency,
+    db: DbDependency,
+) -> Response:
+    item = _debt(db, auth.user.id, entity_id)
+    balance, _ = debt_balance_latest(db, item.id)
+    events = list(
+        db.scalars(
+            select(DebtEvent).where(
+                DebtEvent.debt_item_id == item.id,
+                DebtEvent.user_id == auth.user.id,
+            )
+        )
+    )
+    db.add(
+        AuditLog(
+            user_id=auth.user.id,
+            action="debt.delete",
+            entity_type="debt_item",
+            entity_id=item.id,
+            before_data={
+                "debtType": item.debt_type,
+                "counterparty": item.counterparty,
+                "currencyCode": item.currency_code,
+                "status": item.status,
+                "notes": item.notes,
+                "balance": str(balance),
+                "eventCount": len(events),
+            },
+        )
+    )
+    db.execute(
+        delete(DebtEvent).where(
+            DebtEvent.debt_item_id == item.id,
+            DebtEvent.user_id == auth.user.id,
+        )
+    )
+    db.delete(item)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/balances", response_model=DebtBalanceSheetResponse)
 def debt_balances(
     auth: CurrentAuthDependency,
@@ -188,13 +267,7 @@ def create_debt_event(
     )
     db.add(event)
     db.flush()
-    current_balance, _ = debt_balance_latest(db, item.id)
-    if current_balance == 0:
-        item.status = "settled"
-    elif payload.event_type == "repayment":
-        item.status = "partially_settled"
-    else:
-        item.status = "active"
+    _sync_debt_status(db, item)
     db.add(
         AuditLog(
             user_id=auth.user.id,
@@ -211,3 +284,36 @@ def create_debt_event(
     db.commit()
     db.refresh(event)
     return event
+
+
+@router.delete("/{entity_id}/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_debt_event(
+    entity_id: uuid.UUID,
+    event_id: uuid.UUID,
+    auth: CurrentAuthDependency,
+    db: DbDependency,
+) -> Response:
+    item = _debt(db, auth.user.id, entity_id)
+    event = _debt_event(db, auth.user.id, entity_id, event_id)
+    event_data = {
+        "debtItemId": str(event.debt_item_id),
+        "eventType": event.event_type,
+        "eventDate": event.event_date.isoformat(),
+        "amount": str(event.amount),
+        "counterparty": event.counterparty,
+        "note": event.note,
+    }
+    db.delete(event)
+    db.flush()
+    resulting_balance = _sync_debt_status(db, item)
+    db.add(
+        AuditLog(
+            user_id=auth.user.id,
+            action="debt.event.delete",
+            entity_type="debt_event",
+            entity_id=event_id,
+            before_data={**event_data, "resultingBalance": str(resulting_balance)},
+        )
+    )
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
