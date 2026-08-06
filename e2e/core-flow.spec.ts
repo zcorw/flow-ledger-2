@@ -37,13 +37,13 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
     )
     .toBe(true);
   await expect(
-    page.getByRole('heading', { level: 4, name: '首页看板', exact: true }),
+    page.getByRole('heading', { level: 1, name: '首页看板', exact: true }),
   ).toBeVisible();
   await expectNoSeriousAccessibilityIssues(page, 'dashboard-empty');
 
   await page.getByRole('button', { name: '机构与账户' }).click();
   await expect(
-    page.getByRole('heading', { level: 4, name: '机构与账户', exact: true }),
+    page.getByRole('heading', { level: 1, name: '机构与账户', exact: true }),
   ).toBeVisible();
   const addButtons = page.getByRole('button', { name: '新增' });
 
@@ -121,28 +121,28 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   const assetRow = page.getByRole('row').filter({ hasText: 'E2E Balance' });
   await expect(assetRow).toBeVisible();
   const amountCell = assetRow.getByRole('gridcell').nth(5);
-  await amountCell.dblclick();
-  await amountCell.getByRole('spinbutton').fill('12345.67');
-  await amountCell.getByRole('spinbutton').press('Tab');
+  await amountCell.click();
+  await amountCell.getByRole('textbox').fill('12345.67');
+  await amountCell.getByRole('textbox').press('Tab');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('月度快照已保存')).toBeVisible();
   await expectNoSeriousAccessibilityIssues(page, 'snapshot-grid');
 
   await page.getByRole('button', { name: '机构与账户' }).click();
   await page.getByRole('button', { name: '查看机构历史 E2E Bank' }).click();
-  await expect(page.getByRole('heading', { level: 4, name: 'E2E Bank' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'E2E Bank' })).toBeVisible();
   await expect(page.getByText('机构历史', { exact: true })).toBeVisible();
   await expect(page.getByText('按当前关联关系实时汇总；调整账户关联后，全部历史会同步转移。')).toBeVisible();
   await expect(page.getByRole('grid', { name: 'E2E Bank历史快照明细' }).getByText('E2E Balance')).toBeVisible();
   await page.getByRole('button', { name: '返回机构与账户' }).click();
 
   await page.getByRole('button', { name: '查看账户历史 E2E Account' }).click();
-  await expect(page.getByRole('heading', { level: 4, name: 'E2E Account' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'E2E Account' })).toBeVisible();
   await expect(page.getByText('账户历史', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '返回机构与账户' }).click();
 
   await page.getByRole('button', { name: '查看项目历史 E2E Balance' }).click();
-  await expect(page.getByRole('heading', { level: 4, name: 'E2E Balance' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'E2E Balance' })).toBeVisible();
   await expect(page.getByText('项目历史', { exact: true })).toBeVisible();
   const historyDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: '导出 CSV' }).click();
@@ -163,16 +163,16 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
 
   await page.getByRole('button', { name: '首页看板' }).click();
   await expect(
-    page.getByRole('heading', { level: 4, name: '首页看板', exact: true }),
+    page.getByRole('heading', { level: 1, name: '首页看板', exact: true }),
   ).toBeVisible();
-  await page.getByLabel('快照日期').fill('2026-07-31');
+  await page.getByLabel('统计月份').fill('2026-07');
   await expect(page.getByText('¥12,346').first()).toBeVisible();
-  await expect(page.getByText('当前总资产')).toBeVisible();
-  await expect(page.getByText('当前净资产')).toBeVisible();
+  await expect(page.getByText('当月总资产')).toBeVisible();
+  await expect(page.getByText('当月净资产')).toBeVisible();
 
   await page.reload();
   await expect(
-    page.getByRole('heading', { level: 4, name: '首页看板', exact: true }),
+    page.getByRole('heading', { level: 1, name: '首页看板', exact: true }),
   ).toBeVisible();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: '跳到主要内容' })).toBeFocused();
@@ -324,7 +324,7 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await page.getByLabel('邮箱地址').fill('e2e@example.com');
   await page.getByLabel('密码').fill('e2e-password-456');
   await page.getByRole('button', { name: '登录' }).click();
-  await expect(page.getByRole('heading', { level: 4, name: '首页看板' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: '首页看板' })).toBeVisible();
   await expect(page.getByText('E2E 管理员', { exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: '退出登录' }).click();
   await expect(page.getByRole('heading', { name: '登录 Flow Ledger' })).toBeVisible();
