@@ -102,6 +102,7 @@ def test_snapshot_batch_rates_copy_changes_and_audit(client: TestClient) -> None
     assert sheet["missing_project_ids"] == []
     usd = next(item for item in sheet["rows"] if item["project_id"] == usd_id)
     assert usd["converted_amount_cny"] == "700.000000"
+    assert usd["previous_original_amount"] is None
     assert usd["fx_is_stale"] is True
 
     copied = client.post("/api/v1/snapshots/copy-from-previous", json={"targetDate": "2026-08-31"})
@@ -115,8 +116,11 @@ def test_snapshot_batch_rates_copy_changes_and_audit(client: TestClient) -> None
         json={"snapshotDate": "2026-08-31", "rows": changed_rows},
     )
     assert changed.status_code == 200
-    warning_ids = {item["project_id"] for item in changed.json()["warnings"]}
+    changed_sheet = changed.json()
+    warning_ids = {item["project_id"] for item in changed_sheet["warnings"]}
     assert cny_id in warning_ids
+    changed_cny = next(item for item in changed_sheet["rows"] if item["project_id"] == cny_id)
+    assert changed_cny["previous_original_amount"] == "1000.000000"
 
     rows[0]["originalAmount"] = "1200"
     assert (

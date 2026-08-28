@@ -118,15 +118,35 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
 
   await page.getByRole('button', { name: '月度快照' }).click();
   await page.getByLabel('快照日期').fill('2026-07-31');
+  await expect(page.getByRole('columnheader', { name: 'CNY 折算', exact: true })).toHaveAttribute('aria-colindex', '7');
+  await expect(page.getByRole('columnheader', { name: '上月原币金额', exact: true })).toHaveAttribute('aria-colindex', '8');
+  await expect(page.getByRole('columnheader', { name: '较上月变化', exact: true })).toHaveAttribute('aria-colindex', '9');
   const assetRow = page.getByRole('row').filter({ hasText: 'E2E Balance' });
   await expect(assetRow).toBeVisible();
   const amountCell = assetRow.getByRole('gridcell').nth(5);
   await amountCell.click();
-  await amountCell.getByRole('textbox').fill('12345.67');
-  await amountCell.getByRole('textbox').press('Tab');
+  const amountInput = amountCell.getByRole('textbox');
+  await amountInput.fill('123.45.6');
+  await page.getByLabel('快照日期').click();
+  await expect(amountInput).toHaveValue('123.45.6');
+  await expect(amountInput).toHaveAttribute('aria-invalid', 'true');
+  await expect(amountInput).toBeFocused();
+  await expect(page.getByText('E2E Balance的原币金额不合法')).toBeVisible();
+  await expect(page.getByRole('button', { name: '保存', exact: true })).toBeDisabled();
+  await amountInput.fill('12345.67');
+  await amountInput.press('Tab');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('月度快照已保存')).toBeVisible();
   await expectNoSeriousAccessibilityIssues(page, 'snapshot-grid');
+
+  await page.getByLabel('快照日期').fill('2026-08-31');
+  await expect(assetRow).toBeVisible();
+  await amountCell.click();
+  await amountCell.getByRole('textbox').fill('40000');
+  await amountCell.getByRole('textbox').press('Tab');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByText('异常变化项目：E2E Bank / E2E Account / E2E Balance')).toBeVisible();
+  await expect(assetRow).toHaveClass(/snapshot-row--unusual/);
 
   await page.getByRole('button', { name: '机构与账户' }).click();
   await page.getByRole('button', { name: '查看机构历史 E2E Bank' }).click();

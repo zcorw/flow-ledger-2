@@ -51,6 +51,7 @@ class SnapshotRowResponse(BaseModel):
     currency_code: str
     original_amount: Decimal | None
     converted_amount_cny: Decimal | None
+    previous_original_amount: Decimal | None
     fx_rate_to_cny: Decimal | None
     fx_is_stale: bool
     liquidity_level: str

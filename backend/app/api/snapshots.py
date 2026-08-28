@@ -171,6 +171,9 @@ def _sheet(
                 currency_code=project.currency_code,
                 original_amount=original,
                 converted_amount_cny=converted,
+                previous_original_amount=(
+                    previous_record.original_amount if previous_record else None
+                ),
                 fx_rate_to_cny=rate,
                 fx_is_stale=stale,
                 liquidity_level=(
