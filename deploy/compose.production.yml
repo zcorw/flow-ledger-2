@@ -106,7 +106,8 @@ services:
   frontend:
     image: flow-ledger-frontend:${IMAGE_TAG:-latest}
     build:
-      context: ../frontend
+      context: ..
+      dockerfile: frontend/Dockerfile
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -133,7 +134,7 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
       BACKUP_CRON: ${BACKUP_CRON:-0 2 * * *}
-      BACKUP_ON_START: ${BACKUP_ON_START:-true}
+      BACKUP_ON_START: ${BACKUP_ON_START:-false}
     entrypoint: ["/bin/sh"]
     command: ["/scripts/backup-entrypoint.sh"]
     volumes:

@@ -30,7 +30,8 @@ jobs:
           printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/flow-ledger
           chmod 600 ~/.ssh/known_hosts ~/.ssh/flow-ledger
-          ssh -i ~/.ssh/flow-ledger "$VPS_USER@$VPS_HOST" true
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
+            -i ~/.ssh/flow-ledger "$VPS_USER@$VPS_HOST" true
       - name: Deploy verified main revision
         env:
           DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -39,4 +40,5 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
           remote_command="cd '$VPS_PATH' && git fetch origin main && git checkout main && git merge --ff-only '$DEPLOY_SHA' && test \"\$(git rev-parse HEAD)\" = '$DEPLOY_SHA' && sh deploy/deploy.sh"
-          ssh -i ~/.ssh/flow-ledger "$VPS_USER@$VPS_HOST" "$remote_command"
+          ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
+            -i ~/.ssh/flow-ledger "$VPS_USER@$VPS_HOST" "$remote_command"

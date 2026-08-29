@@ -28,7 +28,72 @@ compose() {
     sh "${project_root}/deploy/compose.sh" "$@"
 }
 
+validate_non_negative_integer() {
+  value="$1"
+  name="$2"
+  case "${value}" in
+    ''|*[!0-9]*)
+      echo "invalid ${name}: ${value}; expected a non-negative integer" >&2
+      exit 2
+      ;;
+  esac
+}
+
+preflight_resources() {
+  min_memory_mb="${DEPLOY_MIN_AVAILABLE_MEMORY_MB:-1024}"
+  min_disk_mb="${DEPLOY_MIN_DOCKER_FREE_MB:-4096}"
+  validate_non_negative_integer "${min_memory_mb}" DEPLOY_MIN_AVAILABLE_MEMORY_MB
+  validate_non_negative_integer "${min_disk_mb}" DEPLOY_MIN_DOCKER_FREE_MB
+
+  available_memory_mb="$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo)"
+  swap_free_mb="$(awk '/^SwapFree:/ { print int($2 / 1024) }' /proc/meminfo)"
+  if [ -n "${available_memory_mb}" ]; then
+    echo "deployment preflight: available memory ${available_memory_mb} MB, free swap ${swap_free_mb:-0} MB"
+    if [ "${available_memory_mb}" -lt "${min_memory_mb}" ]; then
+      echo "deployment preflight failed: available memory is below ${min_memory_mb} MB" >&2
+      exit 1
+    fi
+  fi
+
+  docker_root="$(docker info --format '{{.DockerRootDir}}')"
+  if [ -z "${docker_root}" ] || [ ! -d "${docker_root}" ]; then
+    echo "deployment preflight failed: invalid Docker root directory: ${docker_root}" >&2
+    exit 1
+  fi
+  available_disk_mb="$(df -Pk "${docker_root}" | awk 'NR == 2 { print int($4 / 1024) }')"
+  echo "deployment preflight: Docker root ${docker_root}, available disk ${available_disk_mb} MB"
+  if [ "${available_disk_mb}" -lt "${min_disk_mb}" ]; then
+    echo "deployment preflight failed: Docker disk space is below ${min_disk_mb} MB" >&2
+    docker system df >&2 || true
+    exit 1
+  fi
+  docker system df
+}
+
+prune_old_docker_data() {
+  prune_enabled="${DEPLOY_PRUNE_ENABLED:-true}"
+  prune_until="${DEPLOY_PRUNE_UNTIL:-168h}"
+  case "${prune_enabled}" in
+    true)
+      echo "pruning dangling images and build cache older than ${prune_until}"
+      if ! docker image prune --force --filter "until=${prune_until}"; then
+        echo "warning: unable to prune dangling images" >&2
+      fi
+      if ! docker builder prune --force --filter "until=${prune_until}"; then
+        echo "warning: unable to prune Docker build cache" >&2
+      fi
+      ;;
+    false) ;;
+    *)
+      echo "invalid DEPLOY_PRUNE_ENABLED: ${prune_enabled}; expected true or false" >&2
+      exit 2
+      ;;
+  esac
+}
+
 compose config --quiet
+preflight_resources
+export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
 compose build
 compose up -d postgres
 compose run --rm -e BACKUP_ON_START=false backup /scripts/backup.sh
@@ -60,4 +125,5 @@ until curl --fail --silent --show-error "${health_url}" > /dev/null; do
 done
 
 compose ps
+prune_old_docker_data
 echo "deployment completed with proxy mode ${proxy_mode}: ${health_url}"

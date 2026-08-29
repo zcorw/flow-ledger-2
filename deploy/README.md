@@ -145,7 +145,19 @@ sh deploy/compose.sh config --services
 sh deploy/deploy.sh
 ```
 
-脚本会根据 `PROXY_MODE` 选择 Compose 叠加文件，然后依次校验配置、构建镜像、启动 PostgreSQL、生成部署前备份、执行 Alembic、启动所选服务并等待健康检查。
+脚本会根据 `PROXY_MODE` 选择 Compose 叠加文件，然后依次校验配置、检查 VPS 可用内存和 Docker 磁盘空间、串行构建镜像、启动 PostgreSQL、生成部署前备份、执行 Alembic、启动所选服务并等待健康检查。健康检查成功后，脚本会清理超过指定保留时间的悬空镜像和构建缓存。
+
+默认部署保护参数如下，可在 `.env.production` 中覆盖：
+
+```env
+COMPOSE_PARALLEL_LIMIT=1
+DEPLOY_MIN_AVAILABLE_MEMORY_MB=1024
+DEPLOY_MIN_DOCKER_FREE_MB=4096
+DEPLOY_PRUNE_ENABLED=true
+DEPLOY_PRUNE_UNTIL=168h
+```
+
+两个资源阈值的单位均为 MB，设置为 `0` 可关闭对应检查。自动清理只处理悬空镜像和构建缓存，不使用 `docker system prune -a`；如需暂时保留全部构建缓存，可设置 `DEPLOY_PRUNE_ENABLED=false`。
 
 健康检查默认行为：
 
@@ -199,7 +211,7 @@ sh deploy/compose.sh logs --since 1h proxy
 
 ## 6. 备份
 
-backup 容器启动时先执行一次 `pg_dump --format=custom`，之后按 `BACKUP_CRON` 每日执行；每份备份带 SHA-256 文件，`BACKUP_RETENTION_DAYS` 默认 14 天。
+部署脚本会在迁移前执行一次 `pg_dump --format=custom`。backup 容器之后按 `BACKUP_CRON` 每日执行；默认 `BACKUP_ON_START=false`，避免容器重建时紧接着重复备份。每份备份带 SHA-256 文件，`BACKUP_RETENTION_DAYS` 默认 14 天。
 
 ```bash
 sh deploy/compose.sh exec backup sh /scripts/backup.sh
