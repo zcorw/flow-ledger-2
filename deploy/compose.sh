@@ -5,6 +5,7 @@ project_root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 env_file="${ENV_FILE:-${project_root}/deploy/.env.production}"
 base_file="${project_root}/deploy/compose.production.yml"
 proxy_mode_override="${PROXY_MODE:-}"
+image_tag_override="${IMAGE_TAG:-}"
 
 if [ ! -f "${env_file}" ]; then
   echo "missing production environment file: ${env_file}" >&2
@@ -14,6 +15,11 @@ fi
 set -a
 . "${env_file}"
 set +a
+
+if [ -n "${image_tag_override}" ]; then
+  IMAGE_TAG="${image_tag_override}"
+  export IMAGE_TAG
+fi
 
 proxy_mode="${proxy_mode_override:-${PROXY_MODE:-caddy}}"
 case "${proxy_mode}" in

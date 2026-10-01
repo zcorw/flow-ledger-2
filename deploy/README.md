@@ -9,7 +9,9 @@ PostgreSQL 和后端在两种模式下都不会直接暴露宿主机端口。未
 
 ## 1. VPS 准备
 
-建议环境：2 核 CPU、4 GB 内存、Ubuntu LTS、Git、curl、Docker Engine 与 Compose v2。部署用户需要拥有仓库目录写权限、仓库读取凭据和直接执行 Docker 的权限。
+建议环境：1 核 CPU、1 GB 内存（建议配置 Swap）、Ubuntu LTS、Git、curl、Docker Engine 与 Compose v2。应用镜像由 GitHub Actions 构建，VPS 只负责拉取镜像和运行容器。部署用户需要拥有仓库目录写权限、仓库读取凭据和直接执行 Docker 的权限。
+
+当前工作流发布 `linux/amd64` 镜像，VPS 上的 `uname -m` 应返回 `x86_64`；ARM VPS 需要先将工作流的 `platforms` 调整为 `linux/arm64`。
 
 ```bash
 git clone <repository-url> flow-ledger
@@ -27,6 +29,12 @@ openssl rand -base64 32 # POSTGRES_PASSWORD
 ```
 
 `DATABASE_URL` 中的数据库密码必须进行 URL 编码，并与 `POSTGRES_PASSWORD` 对应。生产配置会拒绝默认值、占位值和过短密钥。
+
+自动部署会使用当次 GitHub Actions 的临时 `GITHUB_TOKEN` 登录 GHCR，不需要在 VPS 永久保存镜像仓库令牌。需要在 VPS 手动部署时，应创建仅有 `read:packages` 权限的 GitHub Personal Access Token（classic），然后登录：
+
+```bash
+printf '%s' '<PAT>' | docker login ghcr.io -u '<GitHub 用户名>' --password-stdin
+```
 
 ## 2. 选择入口代理模式
 
@@ -145,19 +153,28 @@ sh deploy/compose.sh config --services
 sh deploy/deploy.sh
 ```
 
-脚本会根据 `PROXY_MODE` 选择 Compose 叠加文件，然后依次校验配置、检查 VPS 可用内存和 Docker 磁盘空间、串行构建镜像、启动 PostgreSQL、生成部署前备份、执行 Alembic、启动所选服务并等待健康检查。健康检查成功后，脚本会清理超过指定保留时间的悬空镜像和构建缓存。
+脚本会根据 `PROXY_MODE` 选择 Compose 叠加文件，然后依次校验配置、检查 VPS 可用内存和 Docker 磁盘空间、拉取前后端镜像、启动 PostgreSQL、生成部署前备份、执行 Alembic、启动所选服务并等待健康检查。镜像必须全部拉取成功后才会开始备份和更新容器；健康检查成功后，脚本会清理超过指定保留时间且未被任何容器使用的旧镜像。
 
 默认部署保护参数如下，可在 `.env.production` 中覆盖：
 
 ```env
 COMPOSE_PARALLEL_LIMIT=1
-DEPLOY_MIN_AVAILABLE_MEMORY_MB=1024
-DEPLOY_MIN_DOCKER_FREE_MB=4096
+DEPLOY_MIN_AVAILABLE_MEMORY_MB=128
+DEPLOY_MIN_DOCKER_FREE_MB=2048
 DEPLOY_PRUNE_ENABLED=true
 DEPLOY_PRUNE_UNTIL=168h
 ```
 
-两个资源阈值的单位均为 MB，设置为 `0` 可关闭对应检查。自动清理只处理悬空镜像和构建缓存，不使用 `docker system prune -a`；如需暂时保留全部构建缓存，可设置 `DEPLOY_PRUNE_ENABLED=false`。
+两个资源阈值的单位均为 MB，设置为 `0` 可关闭对应检查。镜像拉取按顺序执行，降低小内存 VPS 的瞬时压力。自动清理会处理未使用的旧镜像和迁移前遗留的构建缓存，但不会删除正在使用的镜像或任何 Docker 卷；如需暂时保留这些内容，可设置 `DEPLOY_PRUNE_ENABLED=false`。
+
+如果现有 VPS 的 `.env.production` 已经显式写入旧的 `DEPLOY_MIN_AVAILABLE_MEMORY_MB=1024` 或 `DEPLOY_MIN_DOCKER_FREE_MB=4096`，切换前应按上面的新值调整；否则实际环境文件会覆盖脚本的新默认值。
+
+生产 Compose 项目名仍为 `flow-ledger-production`，数据库继续使用 `flow-ledger-production_postgres_data` 命名卷。部署脚本不会执行 `docker compose down -v`、`docker volume rm` 或其他卷删除操作；即使 PostgreSQL 容器需要重建，也会重新挂载同一个数据卷。首次从 VPS 构建模式切换前建议确认并额外执行一次备份：
+
+```bash
+docker volume inspect flow-ledger-production_postgres_data
+sh deploy/compose.sh exec backup sh /scripts/backup.sh
+```
 
 健康检查默认行为：
 
@@ -238,7 +255,16 @@ sh deploy/verify.sh
 
 ## 8. GitHub Actions 自动部署
 
-`.github/workflows/deploy.yml` 仅在 `main` 的 `CI` 成功后部署完全相同的提交，也可由 `production` Environment 手动触发。代理模式由 VPS 上的 `.env.production` 决定，无需为两种模式创建不同工作流或 GitHub Secrets。
+`CI` 在 `main` 的前端、后端、部署配置和端到端测试全部通过后，在 GitHub 托管 Runner 上构建并推送以下镜像：
+
+```text
+ghcr.io/zcorw/flow-ledger-backend:<commit-sha>
+ghcr.io/zcorw/flow-ledger-frontend:<commit-sha>
+```
+
+同时更新两个镜像的 `latest` 标签，供手动部署使用。`.github/workflows/deploy.yml` 等待整个 `CI`（包括镜像发布）成功后，将同一个提交 SHA 传给 VPS。VPS 使用该 SHA 拉取不可混淆的前后端版本，不再运行 `pip install`、`pnpm install` 或前端编译。自动部署通过仓库自带的 `GITHUB_TOKEN` 获得 GHCR 读取权限，不需要新增 GitHub Secret。
+
+代理模式仍由 VPS 上的 `.env.production` 决定，无需为两种模式创建不同工作流。GitHub 仓库或组织策略必须允许 Actions 对 Packages 使用读写权限；如果 GHCR 返回 `denied`，还需在对应 Package 的设置中确认本仓库拥有 Actions 访问权限。
 
 需要配置：
 
@@ -248,6 +274,14 @@ sh deploy/verify.sh
 - `VPS_KNOWN_HOSTS`：预先核验的 SSH Host Key。
 - `VPS_PATH`：VPS 上仓库绝对路径。
 
-应用代码回滚应在 `main` 创建恢复提交，等待完整 CI 后部署。紧急情况下可在 VPS 切换到已知提交并执行 `sh deploy/deploy.sh`；如果该版本不兼容当前 schema，必须先恢复对应的数据库备份。禁止直接执行未经演练的 Alembic downgrade。
+不需要新增 GHCR 用户名或令牌 Secret。自动部署的远程顺序为：更新已验证的 Git 提交、拉取对应 SHA 镜像、备份数据库、执行迁移、更新应用容器和健康检查。数据库卷不会被替换或删除。
+
+应用代码回滚应优先在 `main` 创建恢复提交，等待完整 CI 后部署。紧急情况下也可在 VPS 使用仍保存在 GHCR 的已知镜像版本：
+
+```bash
+IMAGE_TAG=<known-good-commit-sha> sh deploy/deploy.sh
+```
+
+如果该版本不兼容当前 schema，必须先恢复对应的数据库备份。禁止直接执行未经演练的 Alembic downgrade。
 
 部署失败时，脚本会打印 Compose 状态并返回非零。公共问题查看 backend、migrate、scheduler、frontend 和 backup；仅 Caddy 模式再检查 proxy。迁移失败不会启动新 API，原数据仍由部署前备份保护。

@@ -15,9 +15,14 @@ jobs:
   deploy:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Configure SSH
         env:
@@ -32,6 +37,17 @@ jobs:
           chmod 600 ~/.ssh/known_hosts ~/.ssh/flow-ledger
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             -i ~/.ssh/flow-ledger "$VPS_USER@$VPS_HOST" true
+      - name: Authenticate VPS to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | \
+            ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
+              -i ~/.ssh/flow-ledger "$VPS_USER@$VPS_HOST" \
+              "docker login ghcr.io --username '$GHCR_USER' --password-stdin"
       - name: Deploy verified main revision
         env:
           DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -39,6 +55,6 @@ jobs:
           VPS_PATH: ${{ secrets.VPS_PATH }}
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
-          remote_command="cd '$VPS_PATH' && git fetch origin main && git checkout main && git merge --ff-only '$DEPLOY_SHA' && test \"\$(git rev-parse HEAD)\" = '$DEPLOY_SHA' && sh deploy/deploy.sh"
+          remote_command="cd '$VPS_PATH' && git fetch origin main && git checkout main && git merge --ff-only '$DEPLOY_SHA' && test \"\$(git rev-parse HEAD)\" = '$DEPLOY_SHA' && IMAGE_TAG='$DEPLOY_SHA' sh deploy/deploy.sh"
           ssh -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             -i ~/.ssh/flow-ledger "$VPS_USER@$VPS_HOST" "$remote_command"

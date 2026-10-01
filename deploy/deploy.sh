@@ -4,6 +4,7 @@ set -eu
 project_root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 env_file="${ENV_FILE:-${project_root}/deploy/.env.production}"
 proxy_mode_override="${PROXY_MODE:-}"
+image_tag_override="${IMAGE_TAG:-}"
 
 if [ ! -f "${env_file}" ]; then
   echo "missing production environment file: ${env_file}" >&2
@@ -13,6 +14,16 @@ fi
 set -a
 . "${env_file}"
 set +a
+
+image_tag="${image_tag_override:-${IMAGE_TAG:-latest}}"
+case "${image_tag}" in
+  ''|*[!A-Za-z0-9_.-]*)
+    echo "invalid IMAGE_TAG: ${image_tag}" >&2
+    exit 2
+    ;;
+esac
+IMAGE_TAG="${image_tag}"
+export IMAGE_TAG
 
 proxy_mode="${proxy_mode_override:-${PROXY_MODE:-caddy}}"
 case "${proxy_mode}" in
@@ -40,8 +51,8 @@ validate_non_negative_integer() {
 }
 
 preflight_resources() {
-  min_memory_mb="${DEPLOY_MIN_AVAILABLE_MEMORY_MB:-1024}"
-  min_disk_mb="${DEPLOY_MIN_DOCKER_FREE_MB:-4096}"
+  min_memory_mb="${DEPLOY_MIN_AVAILABLE_MEMORY_MB:-128}"
+  min_disk_mb="${DEPLOY_MIN_DOCKER_FREE_MB:-2048}"
   validate_non_negative_integer "${min_memory_mb}" DEPLOY_MIN_AVAILABLE_MEMORY_MB
   validate_non_negative_integer "${min_disk_mb}" DEPLOY_MIN_DOCKER_FREE_MB
 
@@ -75,12 +86,12 @@ prune_old_docker_data() {
   prune_until="${DEPLOY_PRUNE_UNTIL:-168h}"
   case "${prune_enabled}" in
     true)
-      echo "pruning dangling images and build cache older than ${prune_until}"
-      if ! docker image prune --force --filter "until=${prune_until}"; then
-        echo "warning: unable to prune dangling images" >&2
+      echo "pruning unused images and obsolete build cache older than ${prune_until}"
+      if ! docker image prune --all --force --filter "until=${prune_until}"; then
+        echo "warning: unable to prune unused images" >&2
       fi
-      if ! docker builder prune --force --filter "until=${prune_until}"; then
-        echo "warning: unable to prune Docker build cache" >&2
+      if ! docker builder prune --all --force --filter "until=${prune_until}"; then
+        echo "warning: unable to prune obsolete Docker build cache" >&2
       fi
       ;;
     false) ;;
@@ -94,15 +105,17 @@ prune_old_docker_data() {
 compose config --quiet
 preflight_resources
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
-compose build
+echo "pulling application images for ${IMAGE_TAG}"
+compose pull backend
+compose pull frontend
 compose up -d postgres
 compose run --rm -e BACKUP_ON_START=false backup /scripts/backup.sh
 compose run --rm migrate
 if [ "${proxy_mode}" = "caddy" ]; then
-  compose up -d --remove-orphans --wait --wait-timeout 180 \
+  compose up -d --no-build --remove-orphans --wait --wait-timeout 180 \
     backend scheduler frontend proxy backup
 else
-  compose up -d --remove-orphans --wait --wait-timeout 180 \
+  compose up -d --no-build --remove-orphans --wait --wait-timeout 180 \
     backend scheduler frontend backup
 fi
 

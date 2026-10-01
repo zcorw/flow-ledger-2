@@ -14,9 +14,7 @@ x-app-environment: &app-environment
   LOG_DIR: /var/log/flow-ledger
 
 x-backend-image: &backend-image
-  image: flow-ledger-backend:${IMAGE_TAG:-latest}
-  build:
-    context: ../backend
+  image: ${BACKEND_IMAGE:-ghcr.io/zcorw/flow-ledger-backend}:${IMAGE_TAG:-latest}
 
 x-service-hardening: &service-hardening
   security_opt:
@@ -104,10 +102,7 @@ services:
     logging: *json-logging
 
   frontend:
-    image: flow-ledger-frontend:${IMAGE_TAG:-latest}
-    build:
-      context: ..
-      dockerfile: frontend/Dockerfile
+    image: ${FRONTEND_IMAGE:-ghcr.io/zcorw/flow-ledger-frontend}:${IMAGE_TAG:-latest}
     restart: unless-stopped
     read_only: true
     tmpfs:
