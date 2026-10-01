@@ -13,6 +13,7 @@ from app.models.institution import Institution
 from app.schemas.dashboard import (
     ChartPoint,
     DashboardCharts,
+    DashboardMonths,
     DashboardSummary,
     ProjectChangePoint,
     TrendPoint,
@@ -71,6 +72,21 @@ def _shift_month(value: date, offset: int) -> date:
 
 def _previous_month_end(value: date) -> date:
     return value.replace(day=1) - timedelta(days=1)
+
+
+def dashboard_months(db: Session, user_id: uuid.UUID) -> DashboardMonths:
+    months = list(
+        db.scalars(
+            select(MonthlySnapshot.snapshot_month)
+            .where(MonthlySnapshot.user_id == user_id)
+            .distinct()
+            .order_by(MonthlySnapshot.snapshot_month)
+        )
+    )
+    return DashboardMonths(
+        available_months=months,
+        latest_month=months[-1] if months else None,
+    )
 
 
 def _trend_cutoffs(target_date: date, count: int = 12) -> list[date]:

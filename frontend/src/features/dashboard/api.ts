@@ -5,6 +5,7 @@ export type DashboardSummary = {
   net_worth_cny: string; net_worth_change_from_previous_month_cny: string | null;
   foreign_asset_ratio: string; fx_warnings: string[];
 };
+export type DashboardMonths = { available_months: string[]; latest_month: string | null };
 export type ChartPoint = { name: string; value: string };
 export type TrendRange = '12m' | '24m' | 'all';
 export type DashboardCharts = {
@@ -14,5 +15,6 @@ export type DashboardCharts = {
   project_changes: { project_name: string; institution_name: string; value: string }[];
 };
 
+export const getDashboardMonths = () => apiRequest<DashboardMonths>('/dashboard/months');
 export const getDashboardSummary = (date: string) => apiRequest<DashboardSummary>(`/dashboard/summary?snapshotDate=${date}`);
 export const getDashboardCharts = (date: string, trendRange: TrendRange = '12m') => apiRequest<DashboardCharts>(`/dashboard/charts?snapshotDate=${date}&trendRange=${trendRange}`);

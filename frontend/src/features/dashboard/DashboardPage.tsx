@@ -2,13 +2,13 @@ import AccountBalanceWalletOutlined from '@mui/icons-material/AccountBalanceWall
 import PublicOutlined from '@mui/icons-material/PublicOutlined';
 import TrendingUpOutlined from '@mui/icons-material/TrendingUpOutlined';
 import WarningAmberOutlined from '@mui/icons-material/WarningAmberOutlined';
-import { Alert, Box, Chip, Paper, Skeleton, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Alert, Box, Chip, MenuItem, Paper, Skeleton, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { EChartsCoreOption } from 'echarts/core';
 import { useMemo, useState } from 'react';
-import { getDashboardCharts, getDashboardSummary, type ChartPoint, type TrendRange } from './api';
+import { getDashboardCharts, getDashboardMonths, getDashboardSummary, type ChartPoint, type TrendRange } from './api';
 import { EChart } from './EChart';
-import { localMonth, monthEndDate } from './month';
+import { dashboardMonthOptions, formatMonthLabel, monthEndDate } from './month';
 
 const cny = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 0 });
 const labels: Record<string, string> = { bank_deposit: '银行存款', cash: '现金', securities: '证券', receivable: '债权', t0: '随时可用', within_7d: '7 天内', within_30d: '30 天内', within_90d: '90 天内', locked_or_unknown: '锁定或未知', low: '低风险', medium: '中风险', high: '高风险' };
@@ -23,11 +23,19 @@ function pieOption(title: string, points: ChartPoint[]): EChartsCoreOption {
 }
 
 export function DashboardPage() {
-  const [snapshotMonth, setSnapshotMonth] = useState(localMonth);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [trendRange, setTrendRange] = useState<TrendRange>('12m');
-  const snapshotDate = useMemo(() => monthEndDate(snapshotMonth), [snapshotMonth]);
-  const summaryQuery = useQuery({ queryKey: ['dashboard-summary', snapshotDate], queryFn: () => getDashboardSummary(snapshotDate), placeholderData: keepPreviousData });
-  const chartsQuery = useQuery({ queryKey: ['dashboard-charts', snapshotDate, trendRange], queryFn: () => getDashboardCharts(snapshotDate, trendRange), placeholderData: keepPreviousData });
+  const monthsQuery = useQuery({ queryKey: ['dashboard-months'], queryFn: getDashboardMonths });
+  const availableMonths = useMemo(() => monthsQuery.data?.available_months ?? [], [monthsQuery.data]);
+  const availableMonthSet = useMemo(() => new Set(availableMonths), [availableMonths]);
+  const monthOptions = useMemo(() => dashboardMonthOptions(availableMonths), [availableMonths]);
+  const snapshotMonth = selectedMonth && availableMonthSet.has(selectedMonth)
+    ? selectedMonth
+    : monthsQuery.data?.latest_month ?? '';
+  const snapshotDate = useMemo(() => snapshotMonth ? monthEndDate(snapshotMonth) : null, [snapshotMonth]);
+  const selectedMonthHasData = availableMonthSet.has(snapshotMonth);
+  const summaryQuery = useQuery({ queryKey: ['dashboard-summary', snapshotDate], queryFn: () => getDashboardSummary(snapshotDate!), enabled: selectedMonthHasData, placeholderData: keepPreviousData });
+  const chartsQuery = useQuery({ queryKey: ['dashboard-charts', snapshotDate, trendRange], queryFn: () => getDashboardCharts(snapshotDate!, trendRange), enabled: selectedMonthHasData, placeholderData: keepPreviousData });
   const summary = summaryQuery.data;
   const charts = chartsQuery.data;
   const options = useMemo((): { trend: EChartsCoreOption; top: EChartsCoreOption; changes: EChartsCoreOption } | null => charts ? ({
@@ -37,11 +45,12 @@ export function DashboardPage() {
   }) : null, [charts]);
 
   return <Box>
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, mb: 3 }}><Box><Typography component="h1" variant="h4" sx={{ fontWeight: 780 }}>首页看板</Typography><Typography color="text.secondary" sx={{ mt: 0.5 }}>按月查看资产、负债与净资产。</Typography></Box><TextField label="统计月份" type="month" size="small" value={snapshotMonth} onChange={(event) => event.target.value && setSnapshotMonth(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} /></Stack>
-    {(summaryQuery.isLoading || chartsQuery.isLoading) && <Skeleton variant="rounded" height={140} sx={{ mb: 2 }} />}
-    {(summaryQuery.error || chartsQuery.error) && <Alert severity="error" sx={{ mb: 2 }}>看板加载失败，请检查该月份的快照与汇率。</Alert>}
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, mb: 3 }}><Box><Typography component="h1" variant="h4" sx={{ fontWeight: 780 }}>首页看板</Typography><Typography color="text.secondary" sx={{ mt: 0.5 }}>按月查看资产、负债与净资产。</Typography></Box><TextField select label="统计月份" size="small" value={snapshotMonth} onChange={(event) => setSelectedMonth(event.target.value)} disabled={monthsQuery.isLoading || availableMonths.length === 0} sx={{ minWidth: 170 }}><MenuItem value="" disabled sx={{ display: availableMonths.length > 0 ? 'none' : undefined }}>{monthsQuery.isLoading ? '正在加载月份…' : '暂无可用月份'}</MenuItem>{monthOptions.map((month) => { const hasData = availableMonthSet.has(month); return <MenuItem key={month} value={month} disabled={!hasData}>{formatMonthLabel(month)}{hasData ? '' : '（无数据）'}</MenuItem>; })}</TextField></Stack>
+    {(monthsQuery.isLoading || (selectedMonthHasData && (summaryQuery.isLoading || chartsQuery.isLoading))) && <Skeleton variant="rounded" height={140} sx={{ mb: 2 }} />}
+    {(monthsQuery.error || summaryQuery.error || chartsQuery.error) && <Alert severity="error" sx={{ mb: 2 }}>看板加载失败，请检查该月份的快照与汇率。</Alert>}
     {summary && <><Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(5, 1fr)' }, gap: 1.5 }}><KpiCard title="当月总资产" value={cny.format(Number(summary.total_assets_cny))} detail="当月正资产 + 月末债权" /><KpiCard title="当月总负债" value={cny.format(Number(summary.total_liabilities_cny))} detail="月末债务未偿本金" color="#b24a42" /><KpiCard title="当月净资产" value={cny.format(Number(summary.net_worth_cny))} detail="总资产 − 总负债" color="#1d7b67" /><KpiCard title="较上月金额变化" value={summary.net_worth_change_from_previous_month_cny == null ? '暂无对比' : cny.format(Number(summary.net_worth_change_from_previous_month_cny))} detail="比较两个自然月" /><KpiCard title="外币正资产占比" value={`${(Number(summary.foreign_asset_ratio) * 100).toFixed(1)}%`} detail="仅统计当月正资产" /></Box>{summary.fx_warnings.length > 0 && <Alert severity="warning" icon={<WarningAmberOutlined />} sx={{ mt: 2 }}>部分数据使用历史汇率：{summary.fx_warnings.join('；')}</Alert>}</>}
     {charts && options && <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', xl: 'repeat(2, 1fr)' }, gap: 2, mt: 2 }}><Paper variant="outlined" sx={{ gridColumn: { xl: '1 / -1' }, borderRadius: 2.5 }}><Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ px: 2, pt: 1.5, justifyContent: 'space-between', alignItems: { sm: 'center' } }}><Typography sx={{ fontWeight: 700 }}>净资产月度趋势</Typography><ToggleButtonGroup exclusive size="small" value={trendRange} onChange={(_event, value: TrendRange | null) => value && setTrendRange(value)} aria-label="趋势时间范围"><ToggleButton value="12m">最近 12 个月</ToggleButton><ToggleButton value="24m">最近 24 个月</ToggleButton><ToggleButton value="all">全部</ToggleButton></ToggleButtonGroup></Stack><EChart option={options.trend} label="净资产月度趋势图" height={290} /></Paper>{[['资产组成比例', charts.asset_composition], ['流动性分布', charts.liquidity_distribution], ['风险分布', charts.risk_distribution], ['币种占比', charts.currency_distribution]].map(([title, points]) => <Paper key={title as string} variant="outlined" sx={{ borderRadius: 2.5 }}><EChart option={pieOption(title as string, points as ChartPoint[])} label={`${title as string}图表`} /></Paper>)}<Paper variant="outlined" sx={{ borderRadius: 2.5 }}><EChart option={options.top} label="资产最多的五个机构图表" /></Paper><Paper variant="outlined" sx={{ borderRadius: 2.5 }}><EChart option={options.changes} label="项目金额变化图表" /></Paper></Box>}
+    {monthsQuery.data && availableMonths.length === 0 && <Paper variant="outlined" sx={{ p: 5, textAlign: 'center' }}><AccountBalanceWalletOutlined color="disabled" sx={{ fontSize: 42 }} /><Typography sx={{ fontWeight: 700, mt: 1 }}>暂无月度快照</Typography><Typography color="text.secondary">请先录入月度快照，再查看首页统计。</Typography></Paper>}
     {summary && Number(summary.total_assets_cny) === 0 && <Paper variant="outlined" sx={{ mt: 2, p: 5, textAlign: 'center' }}><AccountBalanceWalletOutlined color="disabled" sx={{ fontSize: 42 }} /><Typography sx={{ fontWeight: 700, mt: 1 }}>该月份暂无正资产</Typography><Typography color="text.secondary">请先在对应月份录入项目余额。</Typography></Paper>}
     <Stack direction="row" spacing={1} sx={{ mt: 2, color: 'text.secondary' }}><PublicOutlined fontSize="small" /><Typography sx={{ fontSize: 12 }}>币种占比只统计正资产；Top 5 机构不受债务影响。</Typography><Chip size="small" icon={<TrendingUpOutlined />} label="金额变化" /></Stack>
   </Box>;

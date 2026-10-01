@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { localMonth, monthEndDate } from './month';
+import { dashboardMonthOptions, formatMonthLabel, localMonth, monthEndDate } from './month';
 
 describe('dashboard month selection', () => {
   it('uses the local calendar month', () => {
@@ -14,5 +14,20 @@ describe('dashboard month selection', () => {
 
   it('rejects an invalid month', () => {
     expect(() => monthEndDate('2026-13')).toThrow('月份必须在 01 到 12 之间');
+  });
+
+  it('builds continuous month options through the current month', () => {
+    expect(dashboardMonthOptions(['2026-06', '2026-08'], '2026-10')).toEqual([
+      '2026-06',
+      '2026-07',
+      '2026-08',
+      '2026-09',
+      '2026-10',
+    ]);
+    expect(dashboardMonthOptions([], '2026-10')).toEqual(['2026-10']);
+  });
+
+  it('formats a month for the dashboard selector', () => {
+    expect(formatMonthLabel('2026-08')).toBe('2026年08月');
   });
 });
