@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getDashboardCharts } from './api';
+import { getDashboardCharts, getDashboardMonths } from './api';
 
 const emptyCharts = {
   trend: [],
@@ -16,6 +16,22 @@ afterEach(() => {
 });
 
 describe('dashboard charts API', () => {
+  it('requests the available dashboard months', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ available_months: ['2026-07'], latest_month: '2026-07' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getDashboardMonths();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/dashboard/months',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
   it.each([
     ['12m', '12m'],
     ['24m', '24m'],

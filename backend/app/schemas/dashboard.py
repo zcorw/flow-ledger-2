@@ -14,6 +14,11 @@ class DashboardSummary(BaseModel):
     fx_warnings: list[str]
 
 
+class DashboardMonths(BaseModel):
+    available_months: list[str]
+    latest_month: str | None
+
+
 class ChartPoint(BaseModel):
     name: str
     value: Decimal

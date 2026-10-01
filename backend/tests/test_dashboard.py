@@ -89,6 +89,10 @@ def debt_with_issue(client: TestClient, debt_type: str, amount: str) -> None:
 
 def test_dashboard_accounting_rules_and_charts(client: TestClient) -> None:
     cny_id, usd_id, negative_id = bootstrap(client)
+    assert client.get("/api/v1/dashboard/months").json() == {
+        "available_months": [],
+        "latest_month": None,
+    }
     with get_session_factory()() as db:
         db.add(
             FxRate(
@@ -121,6 +125,10 @@ def test_dashboard_accounting_rules_and_charts(client: TestClient) -> None:
         ).status_code
         == 200
     )
+    assert client.get("/api/v1/dashboard/months").json() == {
+        "available_months": ["2026-06", "2026-07"],
+        "latest_month": "2026-07",
+    }
     debt_with_issue(client, "receivable", "500")
     debt_with_issue(client, "payable", "200")
 

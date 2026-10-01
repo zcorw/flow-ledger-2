@@ -85,7 +85,7 @@ export function SnapshotPage() {
   });
   const saveMutation = useMutation({
     mutationFn: () => saveSnapshotSheet(snapshotDate, rows.filter((row) => row.original_amount !== null && String(row.original_amount).trim() !== '').map((row) => ({ projectId: row.project_id, originalAmount: String(row.original_amount), liquidityLevel: row.liquidity_level, riskLevel: row.risk_level, changeNote: row.change_note ?? '' }))),
-    onSuccess: async (sheet) => { setDraft({ date: snapshotDate, rows: sheet.rows.map((row) => ({ ...row, grid_id: row.project_id })) }); await queryClient.invalidateQueries({ queryKey: ['snapshots'] }); setNotice('月度快照已保存'); },
+    onSuccess: async (sheet) => { setDraft({ date: snapshotDate, rows: sheet.rows.map((row) => ({ ...row, grid_id: row.project_id })) }); await Promise.all([queryClient.invalidateQueries({ queryKey: ['snapshots'] }), queryClient.invalidateQueries({ queryKey: ['dashboard-months'] }), queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }), queryClient.invalidateQueries({ queryKey: ['dashboard-charts'] })]); setNotice('月度快照已保存'); },
   });
   const handleAmountValidation = useCallback((rowId: string, message: string | null) => {
     setAmountError((current) => message ? { rowId, message } : current?.rowId === rowId ? null : current);

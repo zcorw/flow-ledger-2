@@ -6,11 +6,24 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import CurrentAuthDependency
 from app.db.session import get_db
-from app.schemas.dashboard import DashboardCharts, DashboardSummary
-from app.services.dashboard import TrendRange, dashboard_charts, dashboard_summary
+from app.schemas.dashboard import DashboardCharts, DashboardMonths, DashboardSummary
+from app.services.dashboard import (
+    TrendRange,
+    dashboard_charts,
+    dashboard_months,
+    dashboard_summary,
+)
 
 router = APIRouter()
 DbDependency = Annotated[Session, Depends(get_db)]
+
+
+@router.get("/months", response_model=DashboardMonths)
+def months(
+    auth: CurrentAuthDependency,
+    db: DbDependency,
+) -> DashboardMonths:
+    return dashboard_months(db, auth.user.id)
 
 
 @router.get("/summary", response_model=DashboardSummary)

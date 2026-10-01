@@ -191,10 +191,15 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await expect(
     page.getByRole('heading', { level: 1, name: '首页看板', exact: true }),
   ).toBeVisible();
-  await page.getByLabel('统计月份').fill('2026-07');
+  const dashboardMonth = page.getByLabel('统计月份');
+  await expect(dashboardMonth).toHaveText('2026年08月');
+  await dashboardMonth.click();
+  await expect(page.getByRole('option', { name: '2026年10月（无数据）' })).toBeDisabled();
+  await page.getByRole('option', { name: '2026年07月' }).click();
   await expect(page.getByText('¥12,346').first()).toBeVisible();
   await expect(page.getByText('当月总资产')).toBeVisible();
   await expect(page.getByText('当月净资产')).toBeVisible();
+  await expect(page.getByText('E2E Bank-E2E Balance', { exact: true })).toBeVisible();
 
   await page.reload();
   await expect(

@@ -83,6 +83,7 @@ export function HistoryPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['snapshot-history'] }),
         queryClient.invalidateQueries({ queryKey: ['snapshots'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-months'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-charts'] }),
       ]);
