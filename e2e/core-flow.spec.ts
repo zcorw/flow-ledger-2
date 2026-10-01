@@ -195,6 +195,7 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await expect(page.getByText('¥12,346').first()).toBeVisible();
   await expect(page.getByText('当月总资产')).toBeVisible();
   await expect(page.getByText('当月净资产')).toBeVisible();
+  await expect(page.getByText('E2E Bank-E2E Balance', { exact: true })).toBeVisible();
 
   await page.reload();
   await expect(
