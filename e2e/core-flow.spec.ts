@@ -153,7 +153,13 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await expect(page.getByRole('heading', { level: 1, name: 'E2E Bank' })).toBeVisible();
   await expect(page.getByText('机构历史', { exact: true })).toBeVisible();
   await expect(page.getByText('按当前关联关系实时汇总；调整账户关联后，全部历史会同步转移。')).toBeVisible();
-  await expect(page.getByRole('grid', { name: 'E2E Bank历史快照明细' }).getByText('E2E Balance')).toBeVisible();
+  const institutionHistoryRows = page
+    .getByRole('grid', { name: 'E2E Bank历史快照明细' })
+    .getByRole('row')
+    .filter({ hasText: 'E2E Balance' });
+  await expect(institutionHistoryRows).toHaveCount(2);
+  await expect(institutionHistoryRows.filter({ hasText: '2026-07-31' })).toHaveCount(1);
+  await expect(institutionHistoryRows.filter({ hasText: '2026-08-31' })).toHaveCount(1);
   await page.getByRole('button', { name: '返回机构与账户' }).click();
 
   await page.getByRole('button', { name: '查看账户历史 E2E Account' }).click();
