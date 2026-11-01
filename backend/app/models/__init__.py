@@ -3,6 +3,7 @@ from app.models.audit import AuditLog
 from app.models.auth import AuthSession
 from app.models.configuration import AppSetting, Currency, UserCurrency
 from app.models.debt import DebtEvent, DebtItem
+from app.models.expense import Expense
 from app.models.fx import FxRate, FxSyncRun
 from app.models.institution import Institution
 from app.models.operations import BackupExport, ImportJob
@@ -17,6 +18,7 @@ __all__ = [
     "Currency",
     "DebtEvent",
     "DebtItem",
+    "Expense",
     "FxRate",
     "FxSyncRun",
     "Institution",

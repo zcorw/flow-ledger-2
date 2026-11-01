@@ -9,7 +9,10 @@ os.environ["BOOTSTRAP_TOKEN"] = "test-bootstrap-token"
 os.environ["SECRET_KEY"] = "test-secret-key-that-is-long-enough"
 
 import app.models  # noqa: E402, F401
-from app.core.config import get_settings  # noqa: E402
+from app.core.config import Settings, get_settings  # noqa: E402
+
+Settings.model_config["env_file"] = None
+
 from app.db.base import Base  # noqa: E402
 from app.db.session import get_engine  # noqa: E402
 from app.main import app  # noqa: E402

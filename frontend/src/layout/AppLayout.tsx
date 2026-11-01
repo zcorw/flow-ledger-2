@@ -6,6 +6,7 @@ import MenuOutlined from '@mui/icons-material/MenuOutlined';
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined';
 import SwapHorizOutlined from '@mui/icons-material/SwapHorizOutlined';
 import WalletOutlined from '@mui/icons-material/WalletOutlined';
+import ReceiptLongOutlined from '@mui/icons-material/ReceiptLongOutlined';
 import {
   AppBar,
   Avatar,
@@ -32,6 +33,7 @@ const drawerWidth = 252;
 const navItems = [
   { icon: <DashboardOutlined />, label: '首页看板', path: '/' },
   { icon: <CalendarMonthOutlined />, label: '月度快照', path: '/snapshots' },
+  { icon: <ReceiptLongOutlined />, label: '每日开销', path: '/expenses' },
   { icon: <AccountBalanceOutlined />, label: '机构与账户', path: '/institutions' },
   { icon: <SwapHorizOutlined />, label: '债权债务', path: '/debts' },
   { icon: <SettingsOutlined />, label: '设置', path: '/settings' },

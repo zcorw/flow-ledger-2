@@ -11,6 +11,7 @@ const SnapshotPage = lazy(() => import('./features/snapshots/SnapshotPage').then
 const MasterDataPage = lazy(() => import('./features/assets/MasterDataPage').then((module) => ({ default: module.MasterDataPage })));
 const HistoryPage = lazy(() => import('./features/history/HistoryPage').then((module) => ({ default: module.HistoryPage })));
 const DebtPage = lazy(() => import('./features/debts/DebtPage').then((module) => ({ default: module.DebtPage })));
+const ExpensePage = lazy(() => import('./features/expenses/ExpensePage').then((module) => ({ default: module.ExpensePage })));
 const CurrencySettingsPage = lazy(() => import('./features/settings/CurrencySettingsPage').then((module) => ({ default: module.CurrencySettingsPage })));
 
 function RouteFallback() {
@@ -35,6 +36,7 @@ export function App() {
               <Route path="institutions" element={<MasterDataPage />} />
               <Route path="history" element={<HistoryPage />} />
               <Route path="debts" element={<DebtPage />} />
+              <Route path="expenses" element={<ExpensePage />} />
               <Route path="settings" element={<CurrencySettingsPage />} />
             </Route>
           </Route>

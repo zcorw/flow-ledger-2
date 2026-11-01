@@ -2,7 +2,17 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, Numeric, String, UniqueConstraint, Uuid
+from sqlalchemy import (
+    JSON,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -12,6 +22,7 @@ from app.models.common import UUIDPrimaryKeyMixin, utc_now
 class FxRate(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "fx_rates"
     __table_args__ = (
+        Index("idx_fx_rates_currency_date", "quote_currency", "rate_date"),
         UniqueConstraint(
             "base_currency",
             "quote_currency",

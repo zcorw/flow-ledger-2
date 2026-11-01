@@ -10,7 +10,7 @@ export default defineConfig({
   expect: { timeout: 8_000 },
   reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: 'http://127.0.0.1:4186',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -25,15 +25,15 @@ export default defineConfig({
     {
       command: `${python} e2e_server.py`,
       cwd: './backend',
-      url: 'http://127.0.0.1:8001/api/v1/system/health',
+      url: 'http://127.0.0.1:8016/api/v1/system/health',
       reuseExistingServer: false,
       timeout: 60_000,
     },
     {
-      command: 'pnpm dev --host 127.0.0.1 --port 4173',
+      command: 'pnpm build && pnpm preview --host 127.0.0.1 --port 4186 --strictPort',
       cwd: './frontend',
-      env: { VITE_BACKEND_PROXY_TARGET: 'http://127.0.0.1:8001' },
-      url: 'http://127.0.0.1:4173/setup',
+      env: { VITE_BACKEND_PROXY_TARGET: 'http://127.0.0.1:8016' },
+      url: 'http://127.0.0.1:4186/setup',
       reuseExistingServer: false,
       timeout: 60_000,
     },

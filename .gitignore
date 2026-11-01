@@ -14,6 +14,8 @@ coverage/
 playwright-report/
 test-results/
 *.tsbuildinfo
+frontend/public/ocr/
+docs/evidence/expenses/
 
 # Python
 __pycache__/
