@@ -13,9 +13,11 @@ from app.models.audit import AuditLog
 from app.models.common import utc_now
 from app.models.configuration import AppSetting, UserCurrency
 from app.models.debt import DebtEvent, DebtItem
+from app.models.expense import Expense, ExpenseAmount
 from app.models.fx import FxRate, FxSyncRun
 from app.models.institution import Institution
 from app.models.operations import BackupExport
+from app.schemas.expense import ExpenseFields
 
 USER_TABLES = {
     "user_currencies": UserCurrency,
@@ -25,6 +27,7 @@ USER_TABLES = {
     "monthly_snapshots": MonthlySnapshot,
     "debt_items": DebtItem,
     "debt_events": DebtEvent,
+    "expenses": Expense,
     "audit_logs": AuditLog,
 }
 GLOBAL_TABLES = {
@@ -43,6 +46,7 @@ RESTORE_ORDER = [
     "monthly_snapshots",
     "debt_items",
     "debt_events",
+    "expenses",
     "audit_logs",
 ]
 
@@ -68,7 +72,7 @@ def build_backup_payload(db: Session, user_id: uuid.UUID) -> dict[str, Any]:
         tables[name] = _rows(
             list(db.scalars(select(model).where(model.user_id == user_id)))  # type: ignore[attr-defined]
         )
-    return {"version": 1, "exported_at": utc_now().isoformat(), "tables": tables}
+    return {"version": 2, "exported_at": utc_now().isoformat(), "tables": tables}
 
 
 def backup_checksum(payload: dict[str, Any]) -> str:
@@ -77,15 +81,50 @@ def backup_checksum(payload: dict[str, Any]) -> str:
 
 
 def validate_backup_payload(payload: dict[str, Any]) -> None:
-    if payload.get("version") != 1 or not isinstance(payload.get("tables"), dict):
+    if payload.get("version") not in (1, 2) or not isinstance(payload.get("tables"), dict):
         raise ValueError("不支持的备份格式")
     tables = payload["tables"]
     for table_name in RESTORE_ORDER:
+        if table_name == "expenses" and payload["version"] == 1 and table_name not in tables:
+            continue
         rows = tables.get(table_name)
         if not isinstance(rows, list):
             raise ValueError(f"备份缺少数据表：{table_name}")
         if any(not isinstance(row, dict) for row in rows):
             raise ValueError(f"备份数据表格式无效：{table_name}")
+    account_ids = {str(row.get("id")) for row in tables["accounts"]}
+    seen_keys = set()
+    for row in tables.get("expenses", []):
+        ExpenseFields.model_validate(
+            {
+                name: row.get(name)
+                for name in (
+                    "expense_date",
+                    "amount",
+                    "currency_code",
+                    "category",
+                    "merchant",
+                    "account_id",
+                    "note",
+                )
+            }
+        )
+        key = uuid.UUID(str(row.get("request_key")))
+        if key in seen_keys:
+            raise ValueError("开销幂等键重复")
+        seen_keys.add(key)
+        uuid.UUID(str(row.get("id")))
+        if row.get("source") not in ("manual", "receipt_ocr"):
+            raise ValueError("开销来源无效")
+        if row.get("account_id") is not None and str(row["account_id"]) not in account_ids:
+            raise ValueError("开销关联账户不属于该备份")
+        digest = row.get("request_hash", "")
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(char not in "0123456789abcdef" for char in digest)
+        ):
+            raise ValueError("开销请求摘要无效")
 
 
 def create_backup(db: Session, user_id: uuid.UUID, purpose: str = "manual") -> BackupExport:
@@ -116,7 +155,7 @@ def _decoded_row(model: type[Any], raw: dict[str, Any]) -> dict[str, Any]:
             values[column.name] = datetime.fromisoformat(str(value))
         elif isinstance(column.type, Date):
             values[column.name] = date.fromisoformat(str(value))
-        elif isinstance(column.type, Numeric):
+        elif isinstance(column.type, (Numeric, ExpenseAmount)):
             values[column.name] = Decimal(str(value))
         else:
             values[column.name] = value
@@ -127,6 +166,7 @@ def restore_backup_payload(db: Session, user_id: uuid.UUID, payload: dict[str, A
     tables = payload["tables"]
     for model in (
         AuditLog,
+        Expense,
         DebtEvent,
         DebtItem,
         MonthlySnapshot,
