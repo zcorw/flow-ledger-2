@@ -6,12 +6,14 @@ from datetime import date
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.api.dependencies import CurrentAuthDependency
+from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.db.session import get_db
 from app.models.asset import Account
@@ -20,10 +22,44 @@ from app.models.common import utc_now
 from app.models.expense import Expense
 from app.schemas.asset import AccountResponse
 from app.schemas.expense import ExpenseCategory, ExpenseCreate, ExpenseFields, ExpenseResponse
+from app.schemas.receipt import ReceiptCandidate
 from app.services.fx import enabled_currency_codes
+from app.services.receipt import MAX_IMAGE_BYTES, normalize_image, recognize_receipt
 
 router = APIRouter()
 DbDependency = Annotated[Session, Depends(get_db)]
+
+
+@router.get("/receipt-recognition")
+def receipt_status(auth: CurrentAuthDependency):
+    settings = get_settings()
+    return {"configured": bool(settings.openai_api_key.get_secret_value().strip())}
+
+
+@router.post("/receipt-recognition", response_model=ReceiptCandidate)
+async def receipt_recognition(
+    request: Request,
+    auth: CurrentAuthDependency,
+    x_receipt_upload: Annotated[str | None, Header()] = None,
+):
+    # A non-simple header requires CORS preflight, preventing cross-site form uploads.
+    if x_receipt_upload != "1":
+        raise ApiError(400, "RECEIPT_UPLOAD_HEADER", "请从票据识别入口上传")
+    settings = get_settings()
+    if not settings.openai_api_key.get_secret_value().strip():
+        raise ApiError(503, "RECEIPT_NOT_CONFIGURED", "收据识别尚未配置，请手工录入")
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type not in {"image/png", "image/jpeg"}:
+        raise ApiError(415, "RECEIPT_IMAGE_TYPE", "仅支持 PNG、JPEG 图片")
+    # Raw bounded streaming avoids multipart uploads spooling private images to disk.
+    raw = bytearray()
+    async for chunk in request.stream():
+        if len(raw) + len(chunk) > MAX_IMAGE_BYTES:
+            raise ApiError(413, "RECEIPT_IMAGE_SIZE", "图片须为 1 字节至 8 MB")
+        raw.extend(chunk)
+    image = await run_in_threadpool(normalize_image, bytes(raw), content_type)
+    result = await recognize_receipt(image, settings, str(auth.user.id))
+    return result
 
 
 def _owned(db: Session, user_id: uuid.UUID, entity_id: uuid.UUID) -> Expense:

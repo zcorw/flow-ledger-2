@@ -14,8 +14,8 @@ import {
   categories, createExpense, deleteExpense, getExpenseAccounts, listExpenses, updateExpense,
   type Category, type Expense, type ExpenseFields, type Filters,
 } from './api';
-import { recognizeReceipt, validateReceiptImage } from './ocr';
-import { formatExpenseAmount, localDate, parseReceipt, validAmount, validCalendarDate } from './receiptParser';
+import { getReceiptStatus, recognizeReceipt, validateReceiptImage } from './ocr';
+import { formatExpenseAmount, localDate, validAmount, validCalendarDate } from './receiptParser';
 
 const emptyDraft = (): ExpenseFields => ({ expenseDate: localDate(), amount: '', currencyCode: 'JPY',
   category: 'uncategorized', merchant: '', accountId: null, note: '' });
@@ -43,6 +43,7 @@ export function ExpensePage() {
   const listing = useQuery({ queryKey: ['expenses', filters, page], queryFn: () => listExpenses(filters, page) });
   const currencies = useQuery({ queryKey: ['currencies'], queryFn: getCurrencies });
   const accounts = useQuery({ queryKey: ['expense-accounts'], queryFn: getExpenseAccounts });
+  const receiptStatus = useQuery({ queryKey: ['receipt-status'], queryFn: getReceiptStatus, retry: false });
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [editing, setEditing] = useState<Expense | null>(null);
@@ -52,7 +53,6 @@ export function ExpensePage() {
   const [file, setFile] = useState<File | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [progress, setProgress] = useState({ percent: 0, status: '' });
-  const [ocrText, setOcrText] = useState('');
   const [ocrWarnings, setOcrWarnings] = useState<string[]>([]);
   const [reviewed, setReviewed] = useState(false);
   const [formError, setFormError] = useState('');
@@ -71,7 +71,7 @@ export function ExpensePage() {
       ? updateExpense(editing.id, draft)
       : createExpense({ ...draft, requestKey: requestKey.current, source, allowDuplicate }),
     onSuccess: async () => {
-      setOpen(false); setHasDraft(false); setFile(null); setOcrText(''); setFormError('');
+      setOpen(false); setHasDraft(false); setFile(null); setFormError('');
       setNotice(editing ? '开销已更新' : '开销已保存');
       await invalidate();
     },
@@ -93,14 +93,14 @@ export function ExpensePage() {
   };
   const startNew = () => {
     stopOcr(); setEditing(null); setDraft(emptyDraft()); setSource('manual');
-    requestKey.current = crypto.randomUUID(); setHasDraft(true); setFile(null); setOcrText('');
+    requestKey.current = crypto.randomUUID(); setHasDraft(true); setFile(null);
     setOcrWarnings([]); setReviewed(false); setFormError(''); setDuplicate(false); setOpen(true);
   };
   const edit = (item: Expense) => {
     stopOcr(); setEditing(item); setDraft({ expenseDate: item.expense_date, amount: item.amount,
       currencyCode: item.currency_code, category: item.category, merchant: item.merchant,
       accountId: item.account_id, note: item.note });
-    setSource(item.source); setHasDraft(true); setFile(null); setOcrText('');
+    setSource(item.source); setHasDraft(true); setFile(null);
     setOcrWarnings([]); setFormError(''); setDuplicate(false); setReviewed(true); setOpen(true);
   };
   const changeDraft = (patch: Partial<ExpenseFields>) => {
@@ -115,17 +115,14 @@ export function ExpensePage() {
     try {
       await validateReceiptImage(selected);
       if (version !== generation.current) return;
-      setFile(selected);
       const task = recognizeReceipt(selected, (percent, status) => {
         if (version === generation.current) setProgress({ percent, status });
       });
       cancelOcr.current = task.cancel;
-      const result = await task.result;
+      const candidate = await task.result;
       if (version !== generation.current) return;
-      const candidate = parseReceipt(result.text);
-      setOcrText(result.text);
-      setOcrWarnings([...candidate.warnings, `引擎文字置信度 ${Math.round(result.confidence)}%（不代表字段准确率）。`]);
-      if (!result.text.trim()) throw new Error('未识别到文字，草稿保留，请换图或手工录入。');
+      setFile(selected);
+      setOcrWarnings(candidate.warnings);
       setDraft((value) => ({ ...value, amount: candidate.amount, currencyCode: candidate.currencyCode,
         expenseDate: candidate.expenseDate, merchant: candidate.merchant, category: 'uncategorized' }));
       setSource('receipt_ocr'); setReviewed(false); setDuplicate(false);
@@ -216,14 +213,15 @@ export function ExpensePage() {
         <Stack spacing={2.5}>
           {!editing && <Box>
             <Typography variant="subtitle2" gutterBottom>从票据图片填写</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>支持日文横排与英文。图片仅在浏览器处理，不上传、不长期保存；首次识别需从本站下载引擎和语言模型。每张票据只生成一笔合计候选。</Typography>
-            <input ref={fileInput} type="file" accept="image/png,image/jpeg" aria-label="选择票据图片" disabled={ocrBusy || save.isPending} onChange={(e) => { const selected = e.target.files?.[0]; e.target.value = ''; if (selected) void selectImage(selected); }} />
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>选择图片后，将通过服务器发送给 OpenAI 识别，并产生 API 费用。支持不同语言和版式，每张票据生成一笔合计候选，请核对后保存。请先遮盖不需要识别的个人信息。</Typography>
+            {receiptStatus.data?.configured === false && <Alert severity="info">收据识别尚未配置，请联系管理员或手工录入。</Alert>}
+            {receiptStatus.isError && <Alert severity="warning" action={<Button onClick={() => void receiptStatus.refetch()}>重试</Button>}>暂时无法检查识别服务，可继续手工录入。</Alert>}
+            <input ref={fileInput} type="file" accept="image/png,image/jpeg" aria-label="选择票据图片并发送识别" disabled={ocrBusy || save.isPending || receiptStatus.data?.configured !== true} onChange={(e) => { const selected = e.target.files?.[0]; e.target.value = ''; if (selected) void selectImage(selected); }} />
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>PNG / JPEG · 最大 8 MB · 2000 万像素 · 不支持 PDF / HEIC</Typography>
           </Box>}
-          {ocrBusy && <Box role="status" aria-live="polite"><Typography variant="body2">{progress.status === 'recognizing text' ? '识别文字' : '准备识别资源'} · {progress.percent}%</Typography><LinearProgress variant="determinate" value={progress.percent} sx={{ my: 1 }} /><Button onClick={() => { stopOcr(); setFormError('已取消识别，草稿保留。'); }}>取消识别</Button></Box>}
+          {ocrBusy && <Box role="status" aria-live="polite"><Typography variant="body2">{progress.status}</Typography><LinearProgress sx={{ my: 1 }} /><Button onClick={() => { stopOcr(); setFormError('已取消等待，草稿保留。已发送的请求仍可能计费。'); }}>取消识别</Button></Box>}
           {file && <ReceiptPreview file={file} />}
           {ocrWarnings.map((warning) => <Alert severity="warning" key={warning}>{warning}</Alert>)}
-          {ocrText && <Accordion><AccordionSummary>查看识别原文 ▾</AccordionSummary><AccordionDetails><Typography component="pre" variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{ocrText}</Typography></AccordionDetails></Accordion>}
           {formError && <Alert severity="error">{formError} 草稿已保留，可修正或原样重试。</Alert>}
           {(currencies.isError || accounts.isError) && <Alert severity="warning">币种或账户加载失败，请刷新后继续。</Alert>}
           <Box component="fieldset" disabled={ocrBusy || save.isPending} inert={ocrBusy || save.isPending} sx={{ border: 0, p: 0, m: 0, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>

@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     timezone: str = "Asia/Tokyo"
     backup_dir: str = "./backups"
     log_dir: str | None = None
+    openai_api_key: SecretStr = SecretStr("")
+    receipt_model: str = "gpt-6-luna"
+    receipt_timeout_seconds: float = Field(default=45, ge=1, le=50)
+    receipt_requests_per_minute: int = Field(default=6, ge=1, le=30)
 
     @model_validator(mode="after")
     def reject_unsafe_production_secrets(self) -> "Settings":

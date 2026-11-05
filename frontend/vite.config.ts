@@ -20,8 +20,6 @@ export default defineConfig(({ mode }) => {
     preview: {
       proxy: { '/api': env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:8000' },
     },
-    // Prebundle the OCR worker's dependency so first use cannot reload a draft in dev.
-    optimizeDeps: { include: ['tesseract.js'] },
     test: {
       environment: 'jsdom',
       setupFiles: './src/test/setup.ts',

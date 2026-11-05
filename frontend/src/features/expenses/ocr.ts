@@ -1,3 +1,5 @@
+import { apiRequest } from '../../api/client';
+
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 export const MAX_IMAGE_PIXELS = 20_000_000;
 
@@ -33,26 +35,38 @@ export async function validateReceiptImage(file: File): Promise<void> {
   }
 }
 
-export type OcrResult = { text: string; confidence: number };
+export type ReceiptCandidate = {
+  amount: string; expenseDate: string; currencyCode: string; merchant: string; warnings: string[];
+};
+export const getReceiptStatus = () => apiRequest<{ configured: boolean }>('/expenses/receipt-recognition');
+
 export function recognizeReceipt(file: File, onProgress: (progress: number, status: string) => void,
-  timeoutMs = 90_000): { result: Promise<OcrResult>; cancel: () => void } {
-  const worker = new Worker(new URL('./ocr.worker.ts', import.meta.url), { type: 'module' });
+  timeoutMs = 60_000): { result: Promise<ReceiptCandidate>; cancel: () => void } {
+  const controller = new AbortController();
   let rejectResult: (error: Error) => void;
   let settled = false;
   let timer: ReturnType<typeof setTimeout>;
-  const finish = () => { settled = true; clearTimeout(timer); worker.terminate(); };
-  const result = new Promise<OcrResult>((resolve, reject) => {
+  const finish = () => { settled = true; clearTimeout(timer); };
+  const result = new Promise<ReceiptCandidate>((resolve, reject) => {
     rejectResult = reject;
-    worker.onmessage = (event: MessageEvent<OcrResult & { type: string; progress: number; status: string; message: string }>) => {
-      if (settled) return;
-      const data = event.data;
-      if (data.type === 'progress') onProgress(Math.round(data.progress * 100), data.status);
-      if (data.type === 'result') { finish(); resolve({ text: data.text, confidence: data.confidence }); }
-      if (data.type === 'error') { finish(); reject(new Error(data.message)); }
-    };
-    worker.onerror = () => { if (!settled) { finish(); reject(new Error('OCR 引擎加载失败，可重试或手工录入。')); } };
-    timer = setTimeout(() => { finish(); reject(new Error('识别超时，已停止。草稿保留，可换图重试或手工录入。')); }, timeoutMs);
-    worker.postMessage({ image: file, resourceRoot: new URL(`${import.meta.env.BASE_URL}ocr`, location.origin).href });
+    timer = setTimeout(() => {
+      finish(); controller.abort();
+      reject(new Error('识别超时，未自动重试；草稿保留。已发送的请求仍可能计费。'));
+    }, timeoutMs);
+    onProgress(0, '正在发送图片并等待 AI 识别');
+    void apiRequest<ReceiptCandidate>('/expenses/receipt-recognition', {
+      method: 'POST', body: file, signal: controller.signal,
+      headers: { 'Content-Type': file.type, 'X-Receipt-Upload': '1' },
+    }).then((candidate) => {
+      if (!settled) { finish(); resolve(candidate); }
+    }, (error: unknown) => {
+      if (!settled) { finish(); reject(error); }
+    });
   });
-  return { result, cancel: () => { if (!settled) { finish(); rejectResult(new Error('已取消识别，草稿保留。')); } } };
+  return { result, cancel: () => {
+    if (!settled) {
+      finish(); controller.abort();
+      rejectResult(new Error('已取消等待，草稿保留。已发送的请求仍可能计费。'));
+    }
+  } };
 }

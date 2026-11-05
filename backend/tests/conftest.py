@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 
 os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 os.environ["APP_ENV"] = "test"
+os.environ["OPENAI_API_KEY"] = ""
+os.environ["RECEIPT_MODEL"] = "gpt-6-luna"
 os.environ["BOOTSTRAP_TOKEN"] = "test-bootstrap-token"
 os.environ["SECRET_KEY"] = "test-secret-key-that-is-long-enough"
 

@@ -16,6 +16,13 @@ async function login(page: Page) {
       email: 'e2e@example.com', password: 'e2e-password-456',
     } })).status()).toBe(200);
   }
+  // Browser integration uses synthetic, mocked recognition; never a paid model call.
+  await page.route('**/api/v1/expenses/receipt-recognition', (route) => route.fulfill({
+    json: route.request().method() === 'GET' ? { configured: true } : {
+      amount: '1234', expenseDate: '2026-11-01', currencyCode: 'JPY',
+      merchant: '合成スーパー', warnings: ['请对照原图核对后保存。'],
+    },
+  }));
   await page.goto('/expenses');
   await expect(page.getByRole('heading', { name: '每日开销', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '清空筛选' }).click();
@@ -38,7 +45,7 @@ async function receipt(page: Page, blank = false, commaTotal = false): Promise<B
   return Buffer.from(data, 'base64');
 }
 
-test('daily expenses CRUD, exact currencies, real Japanese OCR, desktop and mobile', async ({ page }) => {
+test('daily expenses CRUD, exact currencies, mocked OpenAI candidate, desktop and mobile', async ({ page }) => {
   test.setTimeout(180_000);
   await mkdir(evidence, { recursive: true });
   await login(page);
@@ -78,7 +85,7 @@ test('daily expenses CRUD, exact currencies, real Japanese OCR, desktop and mobi
   const png = await receipt(page); await writeFile(path.join(evidence, 'synthetic-japanese-receipt.png'), png);
   const outgoing: string[] = [];
   page.on('request', (request) => outgoing.push(request.url()));
-  await dialog.getByLabel('选择票据图片').setInputFiles({ name: 'synthetic.png', mimeType: 'image/png', buffer: png });
+  await dialog.getByLabel('选择票据图片并发送识别').setInputFiles({ name: 'synthetic.png', mimeType: 'image/png', buffer: png });
   await expect(dialog.getByRole('textbox', { name: '金额', exact: true })).toHaveValue('1234', { timeout: 90_000 });
   await expect(dialog.getByLabel('消费日期')).toHaveValue('2026-11-01');
   await expect(dialog.getByRole('combobox', { name: '币种', exact: true })).toContainText('JPY');
@@ -86,8 +93,6 @@ test('daily expenses CRUD, exact currencies, real Japanese OCR, desktop and mobi
   await expect(dialog.getByRole('button', { name: '确认保存', exact: true })).toBeDisabled();
   await writeFile(path.join(evidence, 'ocr-request-urls.json'), JSON.stringify(outgoing, null, 2));
   expect(outgoing.every((url) => url.startsWith('http://127.0.0.1:4186/') || url.startsWith('blob:http://127.0.0.1:4186/'))).toBe(true);
-  await dialog.getByRole('button', { name: '查看识别原文 ▾' }).click();
-  await writeFile(path.join(evidence, 'real-ocr-text.txt'), await dialog.locator('pre').innerText());
   await page.screenshot({ path: path.join(evidence, 'desktop-ocr-review.png'), fullPage: true });
   await dialog.getByLabel('商户（可选）').fill('合成スーパー');
   await dialog.getByLabel('消费分类').click(); await page.getByRole('option', { name: '日用食品', exact: true }).click();
@@ -129,51 +134,60 @@ test('daily expenses CRUD, exact currencies, real Japanese OCR, desktop and mobi
   await expect(page.getByText('合成モバイル', { exact: true })).toHaveCount(0);
 });
 
-test('real OCR resource failure, cancellation, close/reopen and blank result preserve the draft', async ({ page }) => {
-  test.setTimeout(180_000);
+test('mocked API failure, cancellation, close/reopen and unrelated image preserve draft', async ({ page }) => {
   await login(page);
   await page.getByRole('button', { name: '记一笔', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '记录开销' });
   await dialog.getByRole('textbox', { name: '金额', exact: true }).fill('678');
   const png = await receipt(page);
   const image = { name: 'synthetic.png', mimeType: 'image/png', buffer: png };
-  await page.route('**/ocr/lang/**', (route) => route.abort('failed'));
-  await dialog.getByLabel('选择票据图片').setInputFiles(image);
-  await expect(dialog.getByRole('alert').filter({ hasText: /加载|失败/ })).toBeVisible({ timeout: 90_000 });
+  let attempt = 0;
+  await page.route('**/api/v1/expenses/receipt-recognition', async (route) => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { configured: true } });
+    attempt += 1;
+    if (attempt === 1) return route.fulfill({ status: 502, json: { error: { code: 'RECEIPT_CONNECTION', message: '无法连接识别服务' } } });
+    if (attempt === 2) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      return route.fulfill({ json: { amount: '9999', expenseDate: '2026-11-01', currencyCode: 'JPY', merchant: 'late', warnings: [] } }).catch(() => {});
+    }
+    return route.fulfill({ status: 422, json: { error: { code: 'RECEIPT_NOT_FOUND', message: '未识别到单张有效票据' } } });
+  });
+  await dialog.getByLabel('选择票据图片并发送识别').setInputFiles(image);
+  await expect(dialog.getByRole('alert').filter({ hasText: '无法连接' })).toBeVisible();
   await expect(dialog.getByRole('textbox', { name: '金额', exact: true })).toHaveValue('678');
-  await page.unroute('**/ocr/lang/**');
-  // Cancel an actual worker during model loading; no fabricated recognition result.
-  await dialog.getByLabel('选择票据图片').setInputFiles(image);
+  await dialog.getByLabel('选择票据图片并发送识别').setInputFiles(image);
+  await expect.poll(() => attempt).toBe(2);
   await dialog.getByRole('button', { name: '取消识别' }).click();
   await dialog.getByRole('textbox', { name: '金额', exact: true }).fill('679');
   await dialog.getByRole('button', { name: '返回（保留草稿）' }).click();
   await page.getByRole('button', { name: '继续草稿' }).click();
   await expect(dialog.getByRole('textbox', { name: '金额', exact: true })).toHaveValue('679');
   const blank = await receipt(page, true);
-  await dialog.getByLabel('选择票据图片').setInputFiles({ name: 'blank.png', mimeType: 'image/png', buffer: blank });
-  await expect(dialog.getByRole('alert').filter({ hasText: '未识别到文字' })).toBeVisible({ timeout: 90_000 });
+  await dialog.getByLabel('选择票据图片并发送识别').setInputFiles({ name: 'blank.png', mimeType: 'image/png', buffer: blank });
+  await expect(dialog.getByRole('alert').filter({ hasText: '未识别到单张有效票据' })).toBeVisible();
   await expect(dialog.getByRole('textbox', { name: '金额', exact: true })).toHaveValue('679');
-  await dialog.getByLabel('选择票据图片').setInputFiles({ name: 'wrong.txt', mimeType: 'text/plain', buffer: Buffer.from('synthetic') });
+  await dialog.getByLabel('选择票据图片并发送识别').setInputFiles({ name: 'wrong.txt', mimeType: 'text/plain', buffer: Buffer.from('synthetic') });
   await expect(dialog.getByRole('alert').filter({ hasText: '仅支持 PNG' })).toBeVisible();
 });
 
-test('real comma-separated yen receipt requires correction then explicit duplicate confirmation', async ({ page }) => {
+test('uncertain mocked candidate requires correction then explicit duplicate confirmation', async ({ page }) => {
   test.setTimeout(120_000);
   await mkdir(evidence, { recursive: true });
   await login(page);
   await page.getByRole('button', { name: '记一笔', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '记录开销' });
+  await page.route('**/api/v1/expenses/receipt-recognition', (route) => route.fulfill({ json:
+    route.request().method() === 'GET' ? { configured: true } : {
+      amount: '', expenseDate: '2026-11-01', currencyCode: 'JPY', merchant: '合成スーパー',
+      warnings: ['金额不明确，请手工填写。'],
+    },
+  }));
   const png = await receipt(page, false, true);
   await writeFile(path.join(evidence, 'synthetic-japanese-comma-receipt.png'), png);
-  await dialog.getByLabel('选择票据图片').setInputFiles({ name: 'comma-total.png', mimeType: 'image/png', buffer: png });
+  await dialog.getByLabel('选择票据图片并发送识别').setInputFiles({ name: 'comma-total.png', mimeType: 'image/png', buffer: png });
   await expect(dialog.getByRole('checkbox')).toBeVisible({ timeout: 90_000 });
-  await dialog.getByRole('button', { name: '查看识别原文 ▾' }).click();
-  const text = await dialog.locator('pre').innerText();
-  await writeFile(path.join(evidence, 'real-ocr-comma-text.txt'), text);
-  if (/1\.234/.test(text)) {
-    await expect(dialog.getByRole('textbox', { name: '金额', exact: true })).toHaveValue('');
-    await expect(dialog.getByText('日元合计出现小数，可能是千位分隔符识别错误，请对照原图手工填写。')).toBeVisible();
-  }
+  await expect(dialog.getByRole('textbox', { name: '金额', exact: true })).toHaveValue('');
+  await expect(dialog.getByText('金额不明确，请手工填写。')).toBeVisible();
   await page.screenshot({ path: path.join(evidence, 'desktop-ocr-uncertain.png'), fullPage: true });
   await dialog.getByRole('textbox', { name: '金额', exact: true }).fill('1234');
   await dialog.getByLabel('消费日期').fill('2026-11-01');
@@ -225,4 +239,17 @@ test('mobile touch browser records, filters and deletes an expense', async ({ br
     await phone.getByRole('dialog', { name: '删除这笔开销？' }).getByRole('button', { name: '确认删除' }).tap();
     await expect(phone.getByText('合成タッチ', { exact: true })).toHaveCount(0);
   } finally { await context.close(); }
+});
+
+test('unconfigured real backend disables uploads and preserves manual entry', async ({ page }) => {
+  await login(page);
+  await page.unroute('**/api/v1/expenses/receipt-recognition');
+  await page.reload();
+  await page.getByRole('button', { name: '记一笔', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '记录开销' });
+  await expect(dialog.getByText('收据识别尚未配置，请联系管理员或手工录入。')).toBeVisible();
+  await expect(dialog.getByLabel('选择票据图片并发送识别')).toBeDisabled();
+  await expect(dialog.getByText('选择图片后，将通过服务器发送给 OpenAI 识别，并产生 API 费用。', { exact: false })).toBeVisible();
+  await dialog.getByRole('textbox', { name: '金额', exact: true }).fill('10');
+  await expect(dialog.getByRole('button', { name: '确认保存', exact: true })).toBeEnabled();
 });

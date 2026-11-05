@@ -63,7 +63,12 @@ services:
   backend:
     <<: [*backend-image, *service-hardening]
     restart: unless-stopped
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      RECEIPT_MODEL: ${RECEIPT_MODEL:-gpt-6-luna}
+      RECEIPT_TIMEOUT_SECONDS: ${RECEIPT_TIMEOUT_SECONDS:-45}
+      RECEIPT_REQUESTS_PER_MINUTE: ${RECEIPT_REQUESTS_PER_MINUTE:-6}
     volumes:
       - backend_logs:/var/log/flow-ledger
     networks:

@@ -11,6 +11,7 @@ TEST_DIRECTORY = TemporaryDirectory(prefix="flow-ledger-e2e-")
 DATABASE_PATH = Path(TEST_DIRECTORY.name) / "synthetic.db"
 
 os.environ["APP_ENV"] = "test"
+os.environ["OPENAI_API_KEY"] = ""
 os.environ["APP_BASE_URL"] = "http://127.0.0.1:4186"
 os.environ["BOOTSTRAP_TOKEN"] = "e2e-bootstrap-token"
 os.environ["SECRET_KEY"] = "e2e-secret-key-that-is-long-enough"
