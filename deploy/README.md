@@ -36,6 +36,19 @@ openssl rand -base64 32 # POSTGRES_PASSWORD
 printf '%s' '<PAT>' | docker login ghcr.io -u '<GitHub 用户名>' --password-stdin
 ```
 
+### OpenAI 收据识别配置
+
+启用每日开销的图片识别时，在 `deploy/.env.production` 中填写以下配置，并将占位文字替换为 OpenAI 项目 API 密钥。
+
+```dotenv
+OPENAI_API_KEY=在此设置你自己的服务端项目密钥
+RECEIPT_MODEL=gpt-6-luna
+RECEIPT_TIMEOUT_SECONDS=45
+RECEIPT_REQUESTS_PER_MINUTE=6
+```
+
+生产 Compose 将这些变量传给后端。已运行收据识别版本的环境修改配置后，在项目根目录执行 `sh deploy/compose.sh up -d --no-deps --force-recreate backend`，然后刷新应用页面。使用自定义 `ENV_FILE` 时，编辑相应文件并沿用该变量执行命令。模型能力要求、配置验证、费用和隐私说明见 [OpenAI 收据识别](../docs/10-openai-receipts.md)。
+
 ## 2. 选择入口代理模式
 
 ### 2.1 公共配置

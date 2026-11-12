@@ -2,7 +2,7 @@
 
 Flow Ledger 是一个面向个人使用的私有资产管理 Web 应用。它以月度快照为核心，集中管理机构、账户、资产项目、历史汇率和债权债务，并将不同币种统一折算为人民币，用于查看总资产、总负债、净资产及其月度变化。
 
-本项目不是日常消费记账工具，也不连接银行或券商 API，不计算真实投资收益率。
+项目以月度资产快照为核心，也提供独立的每日开销记录；不连接银行或券商 API，不计算真实投资收益率。
 
 ## 主要功能
 
@@ -15,6 +15,25 @@ Flow Ledger 是一个面向个人使用的私有资产管理 Web 应用。它以
 - 导入导出：集中导入或导出主数据、历史汇率、月度快照和债权债务事件。
 - 账户资料：修改管理员显示名称和密码。
 - 运维能力：数据库迁移、健康检查、审计日志、生产部署和定时备份。
+
+## 收据拍照识别
+
+每日开销支持手工录入和图片辅助填写。图片识别通过后端调用 OpenAI Responses API，默认低成本模型为 `gpt-6-luna`；金额、日期、币种和商户均需人工核对后保存，不影响月度资产统计。
+
+在后端使用的 `.env`（生产环境为部署所用环境文件）设置 `OPENAI_API_KEY`，可用 `RECEIPT_MODEL` 调整模型。密钥不得使用 `VITE_` 前缀或放入前端。未配置时仍可手工录入。图片会发送给 OpenAI，可能产生费用；本应用不保存图片或识别原文。完整配置、费用控制与隐私边界见 [收据识别说明](docs/10-openai-receipts.md)。
+
+### OpenAI 配置
+
+本地开发在根目录 `.env`、生产环境在 `deploy/.env.production` 中填写以下配置。先在 OpenAI 控制台创建项目 API 密钥，并替换示例中的占位文字。
+
+```dotenv
+OPENAI_API_KEY=在此设置你自己的服务端项目密钥
+RECEIPT_MODEL=gpt-6-luna
+RECEIPT_TIMEOUT_SECONDS=45
+RECEIPT_REQUESTS_PER_MINUTE=6
+```
+
+已有本地 Docker 环境修改配置后，在项目根目录执行 `docker compose up -d --build --no-deps --force-recreate backend`，然后登录并刷新“每日开销”页面。直接运行 Python 时需重启后端进程。生产环境生效命令、配置检查及常见错误见 [OpenAI 配置步骤](docs/10-openai-receipts.md#模型与配置)。
 
 ## 首页统计口径
 
@@ -223,6 +242,7 @@ Flow-Ledger2/
 - [API 规范](docs/04-api-spec.md)
 - [实现计划](docs/05-implementation-plan.md)
 - [部署与运维](docs/06-deployment-ops.md)
+- [OpenAI 收据识别与配置](docs/10-openai-receipts.md)
 - [质量预算](docs/quality-budgets.md)
 
 ## 安全说明
