@@ -20,8 +20,15 @@ from app.models.asset import Account
 from app.models.audit import AuditLog
 from app.models.common import utc_now
 from app.models.expense import Expense
+from app.models.institution import Institution
 from app.schemas.asset import AccountResponse
-from app.schemas.expense import ExpenseCategory, ExpenseCreate, ExpenseFields, ExpenseResponse
+from app.schemas.expense import (
+    ExpenseAccountResponse,
+    ExpenseCategory,
+    ExpenseCreate,
+    ExpenseFields,
+    ExpenseResponse,
+)
 from app.schemas.receipt import ReceiptCandidate
 from app.services.fx import enabled_currency_codes
 from app.services.receipt import MAX_IMAGE_BYTES, normalize_image, recognize_receipt
@@ -107,11 +114,24 @@ def _replay(item: Expense, digest: str) -> Expense:
     return item
 
 
-@router.get("/accounts", response_model=list[AccountResponse])
+@router.get("/accounts", response_model=list[ExpenseAccountResponse])
 def expense_accounts(auth: CurrentAuthDependency, db: DbDependency):
-    return list(
-        db.scalars(select(Account).where(Account.user_id == auth.user.id).order_by(Account.name))
+    rows = db.execute(
+        select(Account, Institution.name)
+        .outerjoin(
+            Institution,
+            (Institution.id == Account.institution_id) & (Institution.user_id == auth.user.id),
+        )
+        .where(Account.user_id == auth.user.id)
+        .order_by(Institution.name, Account.name, Account.id)
     )
+    return [
+        ExpenseAccountResponse(
+            **AccountResponse.model_validate(account).model_dump(),
+            institution_name=institution_name,
+        )
+        for account, institution_name in rows
+    ]
 
 
 @router.get("")
