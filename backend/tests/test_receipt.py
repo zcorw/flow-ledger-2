@@ -78,24 +78,28 @@ def test_auth_header_and_configuration_block_upload_without_provider(client, pro
     bootstrap(client)
     assert client.post(URL, content=synthetic_image()).status_code == 400
     monkeypatch.setattr(get_settings(), "openai_api_key", SecretStr(""))
-    assert client.get(URL).json() == {"configured": False}
+    assert client.get(URL).json() == {"configured": False, "model": "gpt-6-luna"}
     assert client.post(URL, headers=HEADERS, content=synthetic_image()).status_code == 503
     assert provider["calls"] == []
 
 
 @pytest.mark.parametrize(
-    "changes",
+    ("changes", "model"),
     [
-        {},
-        {"amount": "12.50", "currency_code": "EUR", "merchant": "Synthetic Cafe"},
-        {"amount": "88.80", "currency_code": "CNY", "merchant": "合成商店"},
-        {"amount": "99999999999999.999999"},
+        ({}, "gpt-6-luna"),
+        ({"amount": "12.50", "currency_code": "EUR", "merchant": "Synthetic Cafe"}, "gpt-6-sol"),
+        ({"amount": "88.80", "currency_code": "CNY", "merchant": "合成商店"}, "gpt-6-luna"),
+        ({"amount": "99999999999999.999999"}, "gpt-6-luna"),
     ],
 )
-def test_openai_contract_and_candidate_never_create_expenses(client, provider, changes):
+def test_openai_contract_and_candidate_never_create_expenses(
+    client, provider, monkeypatch, changes, model
+):
     bootstrap(client)
+    monkeypatch.setattr(get_settings(), "receipt_model", model)
     provider["body"] = response_body(**changes)
-    assert client.get(URL).json() == {"configured": True}
+    assert client.get(URL).json() == {"configured": True, "model": model}
+    assert provider["calls"] == []
     result = client.post(URL, headers=HEADERS, content=synthetic_image())
     assert result.status_code == 200
     assert result.json()["amount"] == changes.get("amount", "1234")
@@ -103,7 +107,7 @@ def test_openai_contract_and_candidate_never_create_expenses(client, provider, c
     assert str(request.url) == receipt.OPENAI_URL
     assert request.headers["Authorization"] == "Bearer synthetic-test-key"
     payload = json.loads(request.content)
-    assert payload["model"] == "gpt-6-luna"
+    assert payload["model"] == model
     assert payload["store"] is False
     assert payload["max_output_tokens"] == 2000 and payload["reasoning"] == {"effort": "low"}
     assert "tools" not in payload and "previous_response_id" not in payload

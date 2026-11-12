@@ -38,7 +38,7 @@ export async function validateReceiptImage(file: File): Promise<void> {
 export type ReceiptCandidate = {
   amount: string; expenseDate: string; currencyCode: string; merchant: string; warnings: string[];
 };
-export const getReceiptStatus = () => apiRequest<{ configured: boolean }>('/expenses/receipt-recognition');
+export const getReceiptStatus = () => apiRequest<{ configured: boolean; model: string }>('/expenses/receipt-recognition');
 
 export function recognizeReceipt(file: File, onProgress: (progress: number, status: string) => void,
   timeoutMs = 60_000): { result: Promise<ReceiptCandidate>; cancel: () => void } {

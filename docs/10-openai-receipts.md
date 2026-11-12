@@ -77,7 +77,7 @@ fetch('/api/v1/expenses/receipt-recognition', { credentials: 'same-origin' })
   .then(console.log);
 ```
 
-返回 `{"configured": true}` 表示后端读取到了非空密钥。该检查只读取本地配置，密钥有效性、模型权限和额度需要通过实际识别确认。选择一张脱敏 PNG/JPEG 图片进行识别会调用付费 API，完成后对照原图检查金额、日期、币种和商户。
+返回 `{"configured": true, "model": "gpt-6-luna"}` 表示后端读取到了非空密钥，当前配置的模型为 `gpt-6-luna`。`model` 随 `RECEIPT_MODEL` 配置变化，也会显示在“记录开销”的图片识别区域。该检查只读取本地配置，密钥有效性、模型权限和额度需要通过实际识别确认。选择一张脱敏 PNG/JPEG 图片进行识别会调用付费 API，完成后对照原图检查金额、日期、币种和商户。
 
 | 状态或错误码 | 排查方式 |
 | --- | --- |
@@ -92,7 +92,7 @@ fetch('/api/v1/expenses/receipt-recognition', { credentials: 'same-origin' })
 
 ## 识别与费用边界
 
-- 登录后 `GET /api/v1/expenses/receipt-recognition` 返回是否配置；不会调用 OpenAI。
+- 登录后 `GET /api/v1/expenses/receipt-recognition` 返回是否配置及当前模型名称；不会调用 OpenAI。
 - `POST` 同一路径接收原始 PNG/JPEG 字节，需有效登录和 `X-Receipt-Upload: 1`，不接收远程图片 URL。自定义 header 强制跨域预检。
 - 客户端和服务端均限制 8 MB、2000 万像素、单边 10000 像素。后端完整解码核实格式，应用 EXIF 方向，移除元数据，白底转 JPEG，最长边缩至 4096。图片不落盘，Nginx 对 API 关闭请求缓冲。若另有外部反向代理，应同样禁用该路径的请求落盘/正文日志。
 - 单次一张图片、`detail=high`、`reasoning.effort=low`、输出上限 2000 token，严格结构化输出；不上传完整账本、不使用工具、不产生后续模型对话。后端使用已有 httpx 调用官方固定 HTTPS 地址。

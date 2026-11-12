@@ -33,7 +33,10 @@ DbDependency = Annotated[Session, Depends(get_db)]
 @router.get("/receipt-recognition")
 def receipt_status(auth: CurrentAuthDependency):
     settings = get_settings()
-    return {"configured": bool(settings.openai_api_key.get_secret_value().strip())}
+    return {
+        "configured": bool(settings.openai_api_key.get_secret_value().strip()),
+        "model": settings.receipt_model,
+    }
 
 
 @router.post("/receipt-recognition", response_model=ReceiptCandidate)

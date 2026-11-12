@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const evidence = path.resolve('test-results/expense-evidence');
+const receiptModel = 'gpt-6-sol';
 async function login(page: Page) {
   const state = await (await page.request.get('/api/v1/setup/status')).json();
   if (state.requires_setup) {
@@ -18,7 +19,7 @@ async function login(page: Page) {
   }
   // Browser integration uses synthetic, mocked recognition; never a paid model call.
   await page.route('**/api/v1/expenses/receipt-recognition', (route) => route.fulfill({
-    json: route.request().method() === 'GET' ? { configured: true } : {
+    json: route.request().method() === 'GET' ? { configured: true, model: receiptModel } : {
       amount: '1234', expenseDate: '2026-11-01', currencyCode: 'JPY',
       merchant: '合成スーパー', warnings: ['请对照原图核对后保存。'],
     },
@@ -51,6 +52,7 @@ test('daily expenses CRUD, exact currencies, mocked OpenAI candidate, desktop an
   await login(page);
   await page.getByRole('button', { name: '记一笔', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '记录开销' });
+  await expect(dialog.getByText(`当前识别模型：${receiptModel}`, { exact: true })).toBeVisible();
   await dialog.getByRole('textbox', { name: '金额', exact: true }).fill('45.123456');
   await dialog.getByLabel('消费日期').fill('2026-11-01');
   await dialog.getByRole('combobox', { name: '币种', exact: true }).click();
@@ -143,7 +145,7 @@ test('mocked API failure, cancellation, close/reopen and unrelated image preserv
   const image = { name: 'synthetic.png', mimeType: 'image/png', buffer: png };
   let attempt = 0;
   await page.route('**/api/v1/expenses/receipt-recognition', async (route) => {
-    if (route.request().method() === 'GET') return route.fulfill({ json: { configured: true } });
+    if (route.request().method() === 'GET') return route.fulfill({ json: { configured: true, model: receiptModel } });
     attempt += 1;
     if (attempt === 1) return route.fulfill({ status: 502, json: { error: { code: 'RECEIPT_CONNECTION', message: '无法连接识别服务' } } });
     if (attempt === 2) {
@@ -177,7 +179,7 @@ test('uncertain mocked candidate requires correction then explicit duplicate con
   await page.getByRole('button', { name: '记一笔', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '记录开销' });
   await page.route('**/api/v1/expenses/receipt-recognition', (route) => route.fulfill({ json:
-    route.request().method() === 'GET' ? { configured: true } : {
+    route.request().method() === 'GET' ? { configured: true, model: receiptModel } : {
       amount: '', expenseDate: '2026-11-01', currencyCode: 'JPY', merchant: '合成スーパー',
       warnings: ['金额不明确，请手工填写。'],
     },
@@ -215,6 +217,8 @@ test('mobile touch browser records, filters and deletes an expense', async ({ br
     await phone.getByRole('button', { name: '清空筛选' }).tap();
     await phone.getByRole('button', { name: '记一笔', exact: true }).tap();
     const dialog = phone.getByRole('dialog', { name: '记录开销' });
+    const status = await (await phone.request.get('/api/v1/expenses/receipt-recognition')).json();
+    await expect(dialog.getByText(`当前识别模型：${status.model}`, { exact: true })).toBeVisible();
     await dialog.getByRole('textbox', { name: '金额', exact: true }).fill('125');
     await dialog.getByLabel('商户（可选）').fill('合成タッチ');
     await dialog.getByLabel('消费日期').fill('2026-11-01');
@@ -245,9 +249,11 @@ test('unconfigured real backend disables uploads and preserves manual entry', as
   await login(page);
   await page.unroute('**/api/v1/expenses/receipt-recognition');
   await page.reload();
+  const status = await (await page.request.get('/api/v1/expenses/receipt-recognition')).json();
   await page.getByRole('button', { name: '记一笔', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '记录开销' });
   await expect(dialog.getByText('收据识别尚未配置，请联系管理员或手工录入。')).toBeVisible();
+  await expect(dialog.getByText(`当前识别模型：${status.model}`, { exact: true })).toBeVisible();
   await expect(dialog.getByLabel('选择票据图片并发送识别')).toBeDisabled();
   await expect(dialog.getByText('选择图片后，将通过服务器发送给 OpenAI 识别，并产生 API 费用。', { exact: false })).toBeVisible();
   await dialog.getByRole('textbox', { name: '金额', exact: true }).fill('10');

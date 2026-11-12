@@ -213,6 +213,9 @@ export function ExpensePage() {
         <Stack spacing={2.5}>
           {!editing && <Box>
             <Typography variant="subtitle2" gutterBottom>从票据图片填写</Typography>
+            {receiptStatus.data?.model && <Typography variant="body2" sx={{ mb: 1, overflowWrap: 'anywhere' }}>
+              当前识别模型：{receiptStatus.data.model}
+            </Typography>}
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>选择图片后，将通过服务器发送给 OpenAI 识别，并产生 API 费用。支持不同语言和版式，每张票据生成一笔合计候选，请核对后保存。请先遮盖不需要识别的个人信息。</Typography>
             {receiptStatus.data?.configured === false && <Alert severity="info">收据识别尚未配置，请联系管理员或手工录入。</Alert>}
             {receiptStatus.isError && <Alert severity="warning" action={<Button onClick={() => void receiptStatus.refetch()}>重试</Button>}>暂时无法检查识别服务，可继续手工录入。</Alert>}
