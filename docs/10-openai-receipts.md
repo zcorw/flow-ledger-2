@@ -6,7 +6,13 @@
 
 默认模型 `gpt-6-luna`。截至 2026-11-05，OpenAI Docs 将其列为面向成本敏感任务的模型，支持图片输入、Responses API 和 Structured Outputs。标准短上下文价格为每百万输入 token 0.10 美元、输出 token 0.50 美元。图片会计入输入 token，推理 token 也可能计入输出费用；不能用文件大小推算单张固定费用。价格和账号可用性以平台为准，未验证当前账号的实际模型权限。
 
-在后端环境文件中配置：
+### 创建 API 密钥
+
+在 OpenAI 控制台为应用所在项目创建 API 密钥，并确认该项目有可用额度及所选模型的访问权限。应用使用密钥请求 `https://api.openai.com/v1/responses`，后端运行环境需要能够通过 HTTPS 访问此地址。密钥通过服务端环境变量提供，创建和管理方式见 [OpenAI 官方密钥说明](https://developers.openai.com/api/docs/guides/api-keys)。
+
+### 配置项
+
+将下面四项写入本地开发使用的根目录 `.env`，或生产部署使用的 `deploy/.env.production`。将占位文字替换为实际密钥。
 
 ```dotenv
 OPENAI_API_KEY=在此设置你自己的服务端项目密钥
@@ -15,7 +21,72 @@ RECEIPT_TIMEOUT_SECONDS=45
 RECEIPT_REQUESTS_PER_MINUTE=6
 ```
 
-密钥只放后端环境，不使用 `VITE_` 前缀，不写进仓库。根目录 `.env.example` 和 `deploy/.env.production.example` 提供空值示例。开发 Compose 的 backend 已读取 `.env`；生产 Compose 将上述变量显式传给 backend。修改配置后重建/重启对应服务才生效；本次未执行部署。Python 后端需重新安装 `backend/pyproject.toml` 的依赖（新增 Pillow 12.x）：`python -m pip install -e ".[dev]"`。
+| 配置项 | 默认值 | 用途和取值范围 |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | 空 | 服务端 API 密钥，填写后启用图片上传入口 |
+| `RECEIPT_MODEL` | `gpt-6-luna` | 收据识别模型，需支持图片输入、Responses API、严格 JSON Schema 和 `reasoning.effort=low` |
+| `RECEIPT_TIMEOUT_SECONDS` | `45` | 单次识别的服务端超时秒数，范围为 1–50 |
+| `RECEIPT_REQUESTS_PER_MINUTE` | `6` | 单个后端进程内每用户每分钟的请求上限，范围为 1–30 |
+
+密钥只放后端环境，不使用 `VITE_` 前缀，不写进仓库。根目录 `.env.example` 和 `deploy/.env.production.example` 提供空值示例。识别图片会经本应用后端发送给 OpenAI，并可能产生 API 费用。
+
+### 本地 Docker Compose
+
+首次启动时按[主 README](../README.md)创建 `.env` 并初始化数据库，在 `.env` 中补全上面的配置。已有环境直接编辑现有文件。开发 Compose 的 `backend` 通过 `env_file` 读取根目录 `.env`。
+
+在项目根目录执行以下命令，将配置注入重新创建的后端容器。首次切换到 OpenAI 版本时，`--build` 也会安装新增的图片处理依赖。
+
+```bash
+docker compose up -d --build --no-deps --force-recreate backend
+```
+
+每次修改 `.env` 后都需要重新创建后端容器。`docker compose restart` 会沿用原容器的环境变量。
+
+### 直接运行 Python 后端
+
+从 `backend` 目录启动时，配置依次读取根目录 `.env` 和 `backend/.env`，后读文件中的同名值优先，进程环境变量优先于文件。通常将配置统一放在根目录 `.env`，同时按[本地开发说明](../README.md#本地开发)设置宿主机可访问的数据库地址。
+
+激活虚拟环境后，在 `backend` 目录安装依赖并启动 API。
+
+```bash
+python -m pip install -e ".[dev]"
+uvicorn app.main:app --reload
+```
+
+修改密钥、模型或限流配置后，停止并重新启动后端进程，使缓存的配置重新加载。
+
+### 生产环境
+
+按[生产部署说明](../deploy/README.md)准备 `deploy/.env.production`，在已有配置中补全上述四项。生产 Compose 会将这些变量显式传给 `backend`。使用自定义环境文件时，将配置写入 `ENV_FILE` 指定的文件。
+
+在已部署收据识别版本的服务器上，从项目根目录执行以下命令，使环境变量变更生效。
+
+```bash
+sh deploy/compose.sh up -d --no-deps --force-recreate backend
+```
+
+首次发布收据识别版本时，按部署文档更新包含该功能的应用镜像。以上命令适用于已有对应版本镜像的环境。
+
+### 验证配置与排查错误
+
+登录应用并刷新页面，在“每日开销”中新建开销，检查图片选择入口是否可用。也可在已登录的应用页面打开浏览器开发者工具，在 Console 中执行只读配置检查。
+
+```javascript
+fetch('/api/v1/expenses/receipt-recognition', { credentials: 'same-origin' })
+  .then((response) => response.json())
+  .then(console.log);
+```
+
+返回 `{"configured": true}` 表示后端读取到了非空密钥。该检查只读取本地配置，密钥有效性、模型权限和额度需要通过实际识别确认。选择一张脱敏 PNG/JPEG 图片进行识别会调用付费 API，完成后对照原图检查金额、日期、币种和商户。
+
+| 状态或错误码 | 排查方式 |
+| --- | --- |
+| `configured=false` / `RECEIPT_NOT_CONFIGURED` | 检查实际使用的环境文件及密钥是否为空，重新创建容器或重启 Python 进程后刷新页面 |
+| `RECEIPT_PROVIDER_CONFIG` | 检查密钥所属项目、密钥有效性、所选模型名称及访问权限 |
+| `RECEIPT_PROVIDER_LIMIT` | 检查 OpenAI 项目的可用额度和速率限制 |
+| `RECEIPT_RATE_LIMIT` / `RECEIPT_BUSY` | 等待本应用的每分钟限流或同时识别的请求释放 |
+| `RECEIPT_TIMEOUT` / `RECEIPT_CONNECTION` | 检查后端到 `api.openai.com:443` 的网络连接和超时设置 |
+| `RECEIPT_PROVIDER_ERROR` / `RECEIPT_INVALID_RESULT` | 核对模型是否满足上表中的接口能力要求，再检查上游服务状态或换图重试 |
 
 没有密钥时，界面禁用图片识别并提示配置；手工记账仍可使用。密钥错误、额度不足、模型不可用时返回可理解的错误，不泄露上游响应或密钥，不悄悄更换模型。`RECEIPT_MODEL` 为管理员配置，修改前须确认目标支持图片、严格 JSON schema、`reasoning.effort=low` 和 Responses API。
 

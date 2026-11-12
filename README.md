@@ -22,6 +22,19 @@ Flow Ledger 是一个面向个人使用的私有资产管理 Web 应用。它以
 
 在后端使用的 `.env`（生产环境为部署所用环境文件）设置 `OPENAI_API_KEY`，可用 `RECEIPT_MODEL` 调整模型。密钥不得使用 `VITE_` 前缀或放入前端。未配置时仍可手工录入。图片会发送给 OpenAI，可能产生费用；本应用不保存图片或识别原文。完整配置、费用控制与隐私边界见 [收据识别说明](docs/10-openai-receipts.md)。
 
+### OpenAI 配置
+
+本地开发在根目录 `.env`、生产环境在 `deploy/.env.production` 中填写以下配置。先在 OpenAI 控制台创建项目 API 密钥，并替换示例中的占位文字。
+
+```dotenv
+OPENAI_API_KEY=在此设置你自己的服务端项目密钥
+RECEIPT_MODEL=gpt-6-luna
+RECEIPT_TIMEOUT_SECONDS=45
+RECEIPT_REQUESTS_PER_MINUTE=6
+```
+
+已有本地 Docker 环境修改配置后，在项目根目录执行 `docker compose up -d --build --no-deps --force-recreate backend`，然后登录并刷新“每日开销”页面。直接运行 Python 时需重启后端进程。生产环境生效命令、配置检查及常见错误见 [OpenAI 配置步骤](docs/10-openai-receipts.md#模型与配置)。
+
 ## 首页统计口径
 
 - 首页只统计所选自然月内的月度快照。
@@ -229,6 +242,7 @@ Flow-Ledger2/
 - [API 规范](docs/04-api-spec.md)
 - [实现计划](docs/05-implementation-plan.md)
 - [部署与运维](docs/06-deployment-ops.md)
+- [OpenAI 收据识别与配置](docs/10-openai-receipts.md)
 - [质量预算](docs/quality-budgets.md)
 
 ## 安全说明
