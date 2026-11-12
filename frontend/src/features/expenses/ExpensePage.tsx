@@ -14,6 +14,7 @@ import {
   categories, createExpense, deleteExpense, getExpenseAccounts, listExpenses, updateExpense,
   type Category, type Expense, type ExpenseFields, type Filters,
 } from './api';
+import { expenseAccountLabel } from './accountLabel';
 import { getReceiptStatus, recognizeReceipt, validateReceiptImage } from './ocr';
 import { formatExpenseAmount, localDate, validAmount, validCalendarDate } from './receiptParser';
 
@@ -188,7 +189,7 @@ export function ExpensePage() {
               <TableCell><Typography variant="body2" sx={{ fontWeight: 600 }}>{item.merchant || '未填写商户'}</Typography><Typography variant="caption" color="text.secondary">{item.expense_date}</Typography>{item.note && <Typography variant="body2" sx={{ maxWidth: 260, overflowWrap: 'anywhere' }}>{item.note}</Typography>}</TableCell>
               <TableCell><Chip size="small" label={categories[item.category]} variant="outlined" /></TableCell>
               <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{money(item.amount, item.currency_code)}</TableCell>
-              <TableCell><Typography variant="body2">{accounts.data?.find((a) => a.id === item.account_id)?.name || '未关联账户'}</Typography><Typography variant="caption" color="text.secondary">{item.source === 'receipt_ocr' ? '图片 OCR · 已确认' : '手工录入'}</Typography></TableCell>
+              <TableCell><Typography variant="body2">{(() => { const account = accounts.data?.find((a) => a.id === item.account_id); return account ? expenseAccountLabel(account) : '未关联账户'; })()}</Typography><Typography variant="caption" color="text.secondary">{item.source === 'receipt_ocr' ? '图片 OCR · 已确认' : '手工录入'}</Typography></TableCell>
               <TableCell>{actions(item)}</TableCell>
             </TableRow>)}</TableBody>
           </Table></TableContainer>
@@ -238,7 +239,7 @@ export function ExpensePage() {
             </TextField>
             <TextField label="商户（可选）" value={draft.merchant ?? ''} onChange={(e) => changeDraft({ merchant: e.target.value })} slotProps={{ htmlInput: { maxLength: 150 } }} />
             <TextField select label="支付账户（可选）" value={draft.accountId ?? ''} onChange={(e) => changeDraft({ accountId: e.target.value || null })} helperText="仅关联记录，不扣减余额">
-              <MenuItem value="">不关联账户</MenuItem>{accounts.data?.map((item) => <MenuItem key={item.id} value={item.id}>{item.name}{!item.is_active && '（停用）'}</MenuItem>)}
+              <MenuItem value="">不关联账户</MenuItem>{accounts.data?.map((item) => <MenuItem key={item.id} value={item.id}>{expenseAccountLabel(item)}</MenuItem>)}
             </TextField>
             <TextField label="备注（可选）" multiline minRows={2} value={draft.note ?? ''} onChange={(e) => changeDraft({ note: e.target.value })} sx={{ gridColumn: '1 / -1' }} slotProps={{ htmlInput: { maxLength: 2000 } }} />
           </Box>

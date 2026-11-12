@@ -311,3 +311,30 @@ def test_concurrent_retry_uses_database_unique_constraint(tmp_path):
     finally:
         app.dependency_overrides.pop(get_db, None)
         engine.dispose()
+
+
+def test_payment_accounts_include_institution_context_and_unassigned_accounts(client):
+    assert client.get("/api/v1/expenses/accounts").status_code == 401
+    bootstrap(client)
+    expected = {}
+    for name in ["Bank A", "Bank B"]:
+        institution = client.post("/api/v1/institutions", json={
+            "name": name, "institutionType": "bank",
+        }).json()
+        account = client.post("/api/v1/accounts", json={
+            "name": "资产账户", "accountType": "savings",
+            "institutionId": institution["id"], "maskedIdentifier": "尾号 1234",
+        }).json()
+        expected[account["id"]] = name
+    unassigned = client.post("/api/v1/accounts", json={
+        "name": "Wallet", "accountType": "cash_wallet", "isActive": False,
+    }).json()
+    expected[unassigned["id"]] = None
+
+    response = client.get("/api/v1/expenses/accounts")
+    assert response.status_code == 200
+    rows = response.json()
+    assert {row["id"]: row["institution_name"] for row in rows} == expected
+    assert all(row["name"] == "资产账户" for row in rows if row["institution_id"])
+    assert all(row["masked_identifier"] == "尾号 1234" for row in rows if row["institution_id"])
+    assert next(row for row in rows if row["id"] == unassigned["id"])["is_active"] is False
