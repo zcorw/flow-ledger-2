@@ -281,7 +281,7 @@ test('payment account labels distinguish institutions and survive closing and ed
   await dialog.getByLabel('支付账户（可选）').click();
   await expect(page.getByRole('option', { name: 'Payment Bank A · 资产账户 · 尾号 1234', exact: true })).toBeVisible();
   await page.getByRole('option', { name: 'Payment Bank B · 资产账户 · 尾号 1234', exact: true }).click();
-  await dialog.getByLabel('金额', { exact: true }).fill('25');
+  await dialog.getByRole('textbox', { name: '金额', exact: true }).fill('25');
   await dialog.getByLabel('商户（可选）').fill('Payment label test');
   await dialog.getByRole('button', { name: '返回（保留草稿）' }).click();
   await page.getByRole('button', { name: '继续草稿' }).click();
