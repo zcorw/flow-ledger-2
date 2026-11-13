@@ -2,6 +2,7 @@ import hashlib
 import json
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
 from typing import Annotated
@@ -52,6 +53,15 @@ async def receipt_recognition(
     auth: CurrentAuthDependency,
     x_receipt_upload: Annotated[str | None, Header()] = None,
 ):
+    return await recognize_receipt_request(request, str(auth.user.id), x_receipt_upload)
+
+
+async def recognize_receipt_request(
+    request: Request,
+    user_id: str,
+    x_receipt_upload: str | None,
+    reauthorize: Callable[[], None] | None = None,
+):
     # A non-simple header requires CORS preflight, preventing cross-site form uploads.
     if x_receipt_upload != "1":
         raise ApiError(400, "RECEIPT_UPLOAD_HEADER", "请从票据识别入口上传")
@@ -68,7 +78,9 @@ async def receipt_recognition(
             raise ApiError(413, "RECEIPT_IMAGE_SIZE", "图片须为 1 字节至 8 MB")
         raw.extend(chunk)
     image = await run_in_threadpool(normalize_image, bytes(raw), content_type)
-    result = await recognize_receipt(image, settings, str(auth.user.id))
+    if reauthorize is not None:
+        reauthorize()
+    result = await recognize_receipt(image, settings, user_id)
     return result
 
 
