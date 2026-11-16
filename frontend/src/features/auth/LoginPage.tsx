@@ -4,15 +4,18 @@ import ShieldOutlined from '@mui/icons-material/ShieldOutlined';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Alert, Box, Button, CircularProgress, InputAdornment, Stack, TextField, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { ApiClientError } from '../../api/client';
 import { getSetupStatus, login } from './api';
 import { AuthLayout } from './AuthLayout';
 import { loginSchema, type LoginFormValues } from './schemas';
+import { safeReturnPath } from './returnPath';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = safeReturnPath((location.state as { returnTo?: unknown } | null)?.returnTo);
   const queryClient = useQueryClient();
   const setupStatus = useQuery({ queryKey: ['setup-status'], queryFn: getSetupStatus, retry: 1 });
   const form = useForm<LoginFormValues>({
@@ -23,7 +26,7 @@ export function LoginPage() {
     mutationFn: login,
     onSuccess: async (user) => {
       queryClient.setQueryData(['auth', 'me'], user);
-      await navigate('/', { replace: true });
+      await navigate(returnTo, { replace: true });
     },
   });
 

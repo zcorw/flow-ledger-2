@@ -1,326 +1,333 @@
-"""Synthetic-account HTTP integration; no real OCR or ledger writes."""
+"""Real pairing/router/database contracts with synthetic photos and fake OCR."""
 
 import io
-import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
+from pydantic import SecretStr
 from sqlalchemy import select
-from test_expenses import bootstrap, payload
 
-from app.core.errors import ApiError, api_error_handler
-from app.db.session import get_engine, get_session_factory
-from app.device.grants import DeviceBase, ReceiptDeviceGrant, ReceiptGrants
-from app.device.router import create_receipt_device_router
-from app.models.expense import Expense
+from app.api import expenses
+from app.core.config import get_settings
+from app.core.security import SESSION_COOKIE_NAME
+from app.db.session import get_session_factory
+from app.main import app
+from app.models.receipt_device import ReceiptDevice, ReceiptPairing
 from app.models.user import User
 from app.schemas.receipt import ReceiptCandidate
+from app.services import receipt_device as devices
+from app.services.auth import create_session
+from tests.test_expenses import bootstrap
+
+BASE = "/api/v1/receipt-devices"
+INTENT = {"X-Device-Approval": "1"}
 
 
 @pytest.fixture
-def rig(client):
+def rig(client, monkeypatch):
     bootstrap(client)
-    DeviceBase.metadata.create_all(get_engine())
-    clock = [datetime(2026, 11, 13, tzinfo=UTC)]
-    grants = ReceiptGrants("https://ledger.example", lambda: clock[0])
-    app = FastAPI()
-    app.add_exception_handler(ApiError, api_error_handler)
-    app.include_router(create_receipt_device_router(grants), prefix="/device")
-    with get_session_factory()() as db:
-        user = db.scalar(select(User))
-        owner = user.id
-        grant = grants.approve(db, owner)
-    with TestClient(app) as device:
-        yield device, grants, grant, owner, clock
-    DeviceBase.metadata.drop_all(get_engine())
+    clock = [datetime(2026, 11, 16, tzinfo=UTC)]
+    monkeypatch.setattr(devices, "now", lambda: clock[0])
+    monkeypatch.setattr(get_settings(), "app_base_url", "https://ledger.example")
+    monkeypatch.setattr(get_settings(), "openai_api_key", SecretStr("synthetic-never-sent"))
+    calls = []
 
-
-def bearer(grant):
-    return {"Authorization": "Bearer " + grant["token"]}
-
-
-def confirm(rig):
-    device, _, grant, _, _ = rig
-    assert device.post("/device/confirm", headers=bearer(grant)).status_code == 200
-
-
-def submit(rig, data=None):
-    device, _, grant, _, _ = rig
-    return device.post(
-        "/device/expenses", headers=bearer(grant), json=data or payload(source="receipt_ocr")
-    )
-
-
-def test_confirm_create_same_key_replay_and_conflict(rig):
-    assert submit(rig).status_code == 401
-    confirm(rig)
-    data = payload(source="receipt_ocr")
-    first = submit(rig, data)
-    assert first.status_code == 201
-    assert first.headers["cache-control"] == "no-store"
-    repeated = submit(rig, data)
-    assert repeated.status_code == 200
-    assert repeated.json()["id"] == first.json()["id"]
-    assert submit(rig, {**data, "amount": "12"}).json()["error"]["code"] == "IDEMPOTENCY_CONFLICT"
-    with get_session_factory()() as db:
-        assert len(db.scalars(select(Expense)).all()) == 1
-
-
-def test_duplicate_requires_explicit_same_key_confirmation(rig):
-    confirm(rig)
-    assert submit(rig).status_code == 201
-    data = payload(source="receipt_ocr")
-    assert submit(rig, data).json()["error"]["code"] == "POSSIBLE_DUPLICATE"
-    assert submit(rig, {**data, "allowDuplicate": True}).status_code == 201
-
-
-def test_no_cookie_query_issuance_or_other_privileges(rig, client):
-    device, _, grant, _, _ = rig
-    confirm(rig)
-    assert device.post("/device/confirm?token=" + grant["token"]).status_code == 401
-    assert (
-        device.post(
-            "/device/expenses", cookies=client.cookies, json=payload(source="receipt_ocr")
-        ).status_code
-        == 401
-    )
-    for path in ["/approve", "/renew", "/users", "/accounts", "/expenses"]:
-        assert device.get("/device" + path, headers=bearer(grant)).status_code in {404, 405}
-    assert (
-        device.delete("/device/expenses/" + str(uuid.uuid4()), headers=bearer(grant)).status_code
-        == 404
-    )
-    assert device.post("/device/approve", headers=bearer(grant)).status_code == 404
-    # The actual application does not mount the capability router.
-    assert client.post("/api/v1/device/confirm", headers=bearer(grant)).status_code == 404
-    client.cookies.clear()
-    assert client.get("/api/v1/expenses", headers=bearer(grant)).status_code == 401
-
-
-def test_expiry_confirmation_retry_and_restart(rig):
-    device, grants, grant, _, clock = rig
-    with get_session_factory()() as db:
-        restarted = ReceiptGrants(grants.resource, lambda: clock[0])
-        first = restarted.confirm(db, grant["token"])
-        clock[0] += timedelta(minutes=6)
-        assert restarted.confirm(db, grant["token"]) == first
-        assert restarted.authenticate(db, grant["token"]).user
-    clock[0] += timedelta(minutes=9)
-    assert submit(rig).status_code == 401
-    assert device.post("/device/confirm", headers=bearer(grant)).status_code == 401
-
-
-def test_unconfirmed_deadline_is_exact(rig):
-    device, _, grant, _, clock = rig
-    clock[0] += timedelta(minutes=5)
-    assert device.post("/device/confirm", headers=bearer(grant)).status_code == 401
-    assert submit(rig).status_code == 401
-
-
-def test_revocation_password_change_and_resource_isolation(rig):
-    _, grants, grant, owner, clock = rig
-    confirm(rig)
-    with get_session_factory()() as db:
-        with pytest.raises(ApiError):
-            ReceiptGrants("https://other.example", lambda: clock[0]).authenticate(
-                db, grant["token"]
-            )
-        with pytest.raises(ApiError):
-            grants.revoke(db, uuid.uuid4(), uuid.UUID(grant["deviceId"]))
-        assert grants.authenticate(db, grant["token"]).user.id == owner
-        row = db.get(ReceiptDeviceGrant, uuid.UUID(grant["deviceId"]))
-        assert grant["token"] not in str(row.__dict__)
-        grants.revoke(db, owner, row.id)
-    assert submit(rig).status_code == 401
-    with get_session_factory()() as db:
-        newer = grants.approve(db, owner)
-        grants.confirm(db, newer["token"])
-        user = db.get(User, owner)
-        user.password_hash = "new-synthetic-password-hash"
-        db.commit()
-        with pytest.raises(ApiError):
-            grants.authenticate(db, newer["token"])
-
-
-def test_owner_scope_body_limits_and_redacted_validation(rig):
-    device, _, grant, _, _ = rig
-    confirm(rig)
-    assert (
-        submit(rig, payload(source="receipt_ocr", accountId=str(uuid.uuid4()))).status_code == 404
-    )
-    assert submit(rig, payload(source="manual")).status_code == 422
-    bad = submit(
-        rig,
-        {
-            **payload(source="receipt_ocr"),
-            "userId": str(uuid.uuid4()),
-            "note": "private receipt text",
-        },
-    )
-    assert bad.status_code == 422 and "private receipt text" not in bad.text
-    assert (
-        device.post(
-            "/device/expenses",
-            headers={**bearer(grant), "Content-Type": "application/json"},
-            content=b" " * 16385,
-        ).status_code
-        == 413
-    )
-    assert device.post("/device/expenses", headers=bearer(grant), content=b"{}").status_code == 415
-
-
-def test_scoped_ocr_reuses_normalization_without_real_provider(rig, monkeypatch):
-    from pydantic import SecretStr
-
-    from app.api import expenses
-
-    device, _, grant, owner, _ = rig
-    confirm(rig)
-    monkeypatch.setattr(
-        expenses.get_settings(), "openai_api_key", SecretStr("synthetic-never-sent")
-    )
-    seen = []
-
-    async def fake_recognize(image, settings, user_id):
-        seen.append((image, user_id))
+    async def recognize(image, settings, owner):
+        calls.append((image, owner))
         return ReceiptCandidate(
-            amount="12",
-            expenseDate="2026-11-13",
-            currencyCode="JPY",
-            merchant="Synthetic",
+            amount="88.50",
+            expenseDate="2026-11-15",
+            currencyCode="CNY",
+            merchant="合成商户",
             warnings=[],
         )
 
-    monkeypatch.setattr(expenses, "recognize_receipt", fake_recognize)
-    photo = io.BytesIO()
-    Image.new("RGB", (32, 32), "white").save(photo, "PNG")
-    headers = {**bearer(grant), "Content-Type": "image/png", "X-Receipt-Upload": "1"}
-    result = device.post("/device/receipt-recognition", headers=headers, content=photo.getvalue())
-    assert result.status_code == 200 and result.json()["currencyCode"] == "JPY"
-    assert len(seen) == 1 and seen[0][1] == str(owner)
+    monkeypatch.setattr(expenses, "recognize_receipt", recognize)
+    with TestClient(app) as device:
+        yield client, device, clock, calls
+
+
+def pair(rig):
+    _, device, _, _ = rig
+    response = device.post(BASE + "/pairings", json={"deviceName": "Rokid"})
+    assert response.status_code == 201
+    assert response.headers["cache-control"] == "no-store"
+    return response.json()
+
+
+def grant(rig):
+    owner, device, _, _ = rig
+    pairing = pair(rig)
+    assert (
+        owner.post(
+            BASE + "/pairings/approve", json={"userCode": pairing["userCode"]}, headers=INTENT
+        ).status_code
+        == 200
+    )
+    response = device.post(BASE + "/pairings/token", json={"deviceCode": pairing["deviceCode"]})
+    assert response.status_code == 200
+    return response.json()
+
+
+def upload(device, token, image=None):
+    if image is None:
+        encoded = io.BytesIO()
+        Image.new("RGB", (40, 80), "white").save(encoded, "PNG")
+        image = encoded.getvalue()
+    return device.post(
+        BASE + "/receipt-recognition",
+        headers={
+            "Authorization": "Bearer " + token,
+            "Content-Type": "image/png",
+            "X-Receipt-Upload": "1",
+        },
+        content=image,
+    )
+
+
+def test_explicit_phone_approval_then_real_receipt_handler(rig):
+    owner, device, _, calls = rig
+    pairing = pair(rig)
+    assert pairing["verificationUri"] == "https://ledger.example/receipt-devices"
     assert (
         device.post(
-            "/device/receipt-recognition", headers=headers, content=b"not an image"
+            BASE + "/pairings/token", json={"deviceCode": pairing["deviceCode"]}
         ).status_code
-        == 422
+        == 202
     )
+    status = owner.post(BASE + "/pairings/lookup", json={"userCode": pairing["userCode"]})
+    assert status.json()["status"] == "pending"
+    assert "deviceCode" not in status.text and pairing["deviceCode"] not in status.text
+    assert (
+        owner.post(
+            BASE + "/pairings/approve", json={"userCode": pairing["userCode"]}, headers=INTENT
+        ).json()["status"]
+        == "approved"
+    )
+    response = device.post(BASE + "/pairings/token", json={"deviceCode": pairing["deviceCode"]})
+    token = response.json()["accessToken"]
+    assert response.json()["scope"] == "receipt:recognize"
+    assert response.json()["expiresAt"] is None
+    result = upload(device, token)
+    assert result.status_code == 200 and result.json()["amount"] == "88.50"
+    assert result.headers["cache-control"] == "no-store"
+    assert len(calls) == 1 and calls[0][0].startswith(b"\xff\xd8")
     assert (
         device.post(
-            "/device/receipt-recognition",
-            headers={**bearer(grant), "Content-Type": "image/png"},
-            content=photo.getvalue(),
+            BASE + "/pairings/token", json={"deviceCode": pairing["deviceCode"]}
         ).status_code
-        == 400
+        == 409
     )
-    assert len(seen) == 1
-
-
-@pytest.mark.parametrize(
-    "resource",
-    [
-        "http://ledger.example",
-        "https://u:p@ledger.example",
-        "https://ledger.example/path",
-        "https://ledger.example?x=1",
-    ],
-)
-def test_invalid_resource(resource):
-    with pytest.raises(ValueError):
-        ReceiptGrants(resource)
-
-
-def test_cross_account_links_are_rejected(rig):
-    from app.models.asset import Account
-
-    confirm(rig)
     with get_session_factory()() as db:
-        other = User(
-            id=uuid.uuid4(),
-            email="other@example.com",
-            display_name="Other",
-            password_hash="synthetic",
+        row = db.scalar(select(ReceiptDevice))
+        assert token not in str(row.__dict__)
+        pairing_row = db.scalar(select(ReceiptPairing))
+        assert pairing["deviceCode"] not in str(pairing_row.__dict__)
+    assert token not in owner.get(BASE).text
+
+
+def test_owner_approval_requires_session_custom_header_and_matching_origin(rig):
+    owner, device, _, _ = rig
+    pairing = pair(rig)
+    path = BASE + "/pairings/approve"
+    payload = {"userCode": pairing["userCode"]}
+    assert device.post(path, json=payload, headers=INTENT).status_code == 401
+    assert owner.post(path, json=payload).status_code == 400
+    assert (
+        owner.post(
+            path, json=payload, headers={**INTENT, "Origin": "https://evil.example"}
+        ).status_code
+        == 403
+    )
+    assert (
+        owner.post(BASE + "/pairings/lookup", json={"userCode": pairing["userCode"]}).json()[
+            "status"
+        ]
+        == "pending"
+    )
+    assert (
+        owner.post(
+            path, json=payload, headers={**INTENT, "Origin": "https://ledger.example"}
+        ).status_code
+        == 200
+    )
+    assert owner.post(path, json=payload, headers=INTENT).status_code == 200
+
+
+def test_receipt_token_has_no_web_or_expense_privileges_and_cookies_are_not_device_credentials(rig):
+    owner, device, _, calls = rig
+    token = grant(rig)["accessToken"]
+    assert upload(owner, "").status_code == 401
+    assert (
+        device.get("/api/v1/expenses", headers={"Authorization": "Bearer " + token}).status_code
+        == 401
+    )
+    assert (
+        device.post(
+            "/api/v1/expenses", headers={"Authorization": "Bearer " + token}, json={}
+        ).status_code
+        == 401
+    )
+    assert device.get(BASE).status_code == 401
+    assert (
+        device.post(BASE + "/receipt-recognition?token=" + token, content=b"not sent").status_code
+        == 401
+    )
+    assert calls == []
+
+
+def test_device_revocation_and_legacy_expiry_block_recognition(rig):
+    owner, device, clock, calls = rig
+    first = grant(rig)
+    assert owner.delete(BASE + "/" + first["deviceId"]).status_code == 400
+    assert owner.delete(BASE + "/" + first["deviceId"], headers=INTENT).status_code == 204
+    assert owner.delete(BASE + "/" + first["deviceId"], headers=INTENT).status_code == 204
+    assert upload(device, first["accessToken"]).status_code == 401
+    second = grant(rig)
+    # Existing finite grants retain their original expiry across the migration.
+    with get_session_factory()() as db:
+        row = db.scalar(
+            select(ReceiptDevice).where(
+                ReceiptDevice.token_hash == devices.digest(second["accessToken"])
+            )
         )
+        row.expires_at = clock[0] + timedelta(seconds=900)
+        db.commit()
+    clock[0] += timedelta(seconds=900)
+    assert upload(device, second["accessToken"]).status_code == 401
+    assert owner.get(BASE).json() == []
+    assert calls == []
+
+
+def test_permanent_grant_survives_years_and_pairing_cleanup_until_revoked(rig):
+    owner, device, clock, calls = rig
+    granted = grant(rig)
+    assert granted["expiresAt"] is None
+    clock[0] += timedelta(days=3650)
+    assert upload(device, granted["accessToken"]).status_code == 200
+    assert len(calls) == 1
+    pair(rig)  # Cleanup must not delete a grant without an expiration date.
+    current = owner.get(BASE).json()
+    assert len(current) == 1 and current[0]["expiresAt"] is None
+    assert current[0]["id"] == granted["deviceId"]
+    assert owner.delete(BASE + "/" + granted["deviceId"], headers=INTENT).status_code == 204
+    assert upload(device, granted["accessToken"]).status_code == 401
+    assert len(calls) == 1
+
+
+def test_denied_and_expired_pairings_never_issue_tokens(rig):
+    owner, device, clock, _ = rig
+    first = pair(rig)
+    assert (
+        owner.post(
+            BASE + "/pairings/deny", json={"userCode": first["userCode"]}, headers=INTENT
+        ).status_code
+        == 200
+    )
+    assert (
+        device.post(BASE + "/pairings/token", json={"deviceCode": first["deviceCode"]}).status_code
+        == 403
+    )
+    second = pair(rig)
+    clock[0] += timedelta(seconds=600)
+    assert (
+        owner.post(BASE + "/pairings/lookup", json={"userCode": second["userCode"]}).status_code
+        == 404
+    )
+    assert (
+        device.post(BASE + "/pairings/token", json={"deviceCode": second["deviceCode"]}).status_code
+        == 410
+    )
+
+
+def test_pairing_rate_poll_interval_and_body_bounds(rig):
+    _, device, clock, _ = rig
+    first = pair(rig)
+    payload = {"deviceCode": first["deviceCode"]}
+    assert device.post(BASE + "/pairings/token", json=payload).status_code == 202
+    assert device.post(BASE + "/pairings/token", json=payload).status_code == 429
+    clock[0] += timedelta(seconds=3)
+    assert device.post(BASE + "/pairings/token", json=payload).status_code == 202
+    for _ in range(5):
+        pair(rig)
+    assert device.post(BASE + "/pairings", json={"deviceName": "Rokid"}).status_code == 429
+    assert (
+        device.post(
+            BASE + "/pairings", headers={"Content-Type": "application/json"}, content=b" " * 4097
+        ).status_code
+        == 413
+    )
+    invalid = device.post(BASE + "/pairings", json={"userId": "private-value"})
+    assert invalid.status_code == 422 and "private-value" not in invalid.text
+    assert invalid.headers["cache-control"] == "no-store"
+
+
+def test_password_change_invalidates_both_pending_approval_and_issued_token(rig):
+    owner, device, _, _ = rig
+    token = grant(rig)["accessToken"]
+    pending = pair(rig)
+    owner.post(BASE + "/pairings/approve", json={"userCode": pending["userCode"]}, headers=INTENT)
+    with get_session_factory()() as db:
+        user = db.scalar(select(User))
+        user.password_hash = "changed-password-fingerprint"
+        db.commit()
+    assert upload(device, token).status_code == 401
+    assert (
+        device.post(
+            BASE + "/pairings/token", json={"deviceCode": pending["deviceCode"]}
+        ).status_code
+        == 410
+    )
+
+
+def test_owner_isolation_for_codes_and_device_revocation(rig):
+    owner, device, _, _ = rig
+    grant_data = grant(rig)
+    pending = pair(rig)
+    owner.post(BASE + "/pairings/approve", json={"userCode": pending["userCode"]}, headers=INTENT)
+    with get_session_factory()() as db:
+        other = User(email="other@example.com", display_name="Other", password_hash="synthetic")
         db.add(other)
         db.flush()
-        account = Account(
-            id=uuid.uuid4(), user_id=other.id, name="Other account", account_type="savings"
-        )
-        db.add(account)
+        session = create_session(db, other)
         db.commit()
-        other_id, account_id = other.id, account.id
-    result = submit(rig, payload(source="receipt_ocr", accountId=str(account_id)))
-    assert result.status_code == 404
-    assert "Other account" not in result.text
+    device.cookies.set(SESSION_COOKIE_NAME, session)
     assert (
-        submit(rig, {**payload(source="receipt_ocr"), "userId": str(other_id)}).status_code == 422
+        device.post(BASE + "/pairings/lookup", json={"userCode": pending["userCode"]}).status_code
+        == 404
     )
+    assert device.delete(BASE + "/" + grant_data["deviceId"], headers=INTENT).status_code == 404
+    assert device.get(BASE).json() == []
 
 
-def test_revocation_during_body_read_blocks_write(rig):
-    import asyncio
-    import json
-
-    from fastapi import Request, Response
-
-    _, grants, grant, owner, _ = rig
-    confirm(rig)
-    endpoint = next(
-        r.endpoint for r in create_receipt_device_router(grants).routes if r.path == "/expenses"
-    )
-    with get_session_factory()() as db:
-
-        async def receive():
-            grants.revoke(db, owner, uuid.UUID(grant["deviceId"]))
-            return {
-                "type": "http.request",
-                "body": json.dumps(payload(source="receipt_ocr")).encode(),
-                "more_body": False,
-            }
-
-        request = Request(
-            {
-                "type": "http",
-                "headers": [
-                    (b"authorization", ("Bearer " + grant["token"]).encode()),
-                    (b"content-type", b"application/json"),
-                ],
-                "method": "POST",
-                "path": "/expenses",
-            },
-            receive,
-        )
-        with pytest.raises(ApiError, match="设备授权无效"):
-            asyncio.run(endpoint(request, Response(), db))
-        assert db.scalars(select(Expense)).all() == []
-
-
-def test_revocation_during_image_processing_blocks_provider(rig, monkeypatch):
-    from pydantic import SecretStr
-
-    from app.api import expenses
-
-    device, grants, grant, owner, _ = rig
-    confirm(rig)
-    monkeypatch.setattr(expenses.get_settings(), "openai_api_key", SecretStr("never-sent"))
+def test_revocation_during_image_processing_prevents_provider_call(rig, monkeypatch):
+    _, device, _, calls = rig
+    token = grant(rig)["accessToken"]
 
     def normalize(raw, mime):
         with get_session_factory()() as db:
-            grants.revoke(db, owner, uuid.UUID(grant["deviceId"]))
+            row = db.scalar(select(ReceiptDevice))
+            row.revoked_at = devices.now()
+            db.commit()
         return b"synthetic-normalized"
 
-    async def forbidden(*args):
-        raise AssertionError("Revoked request must not reach provider")
-
     monkeypatch.setattr(expenses, "normalize_image", normalize)
-    monkeypatch.setattr(expenses, "recognize_receipt", forbidden)
-    result = device.post(
-        "/device/receipt-recognition",
-        headers={**bearer(grant), "Content-Type": "image/png", "X-Receipt-Upload": "1"},
-        content=b"photo",
+    assert upload(device, token).status_code == 401
+    assert calls == []
+
+
+def test_invalid_photo_and_missing_upload_header_never_call_provider(rig):
+    _, device, _, calls = rig
+    token = grant(rig)["accessToken"]
+    assert upload(device, token, b"invalid-image").status_code == 422
+    assert (
+        device.post(
+            BASE + "/receipt-recognition",
+            headers={"Authorization": "Bearer " + token, "Content-Type": "image/png"},
+            content=b"invalid-image",
+        ).status_code
+        == 400
     )
-    assert result.status_code == 401
-    assert result.headers["cache-control"] == "no-store"
-    assert grant["token"] not in result.text
+    assert calls == []

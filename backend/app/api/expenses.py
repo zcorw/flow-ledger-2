@@ -60,7 +60,7 @@ async def recognize_receipt_request(
     request: Request,
     user_id: str,
     x_receipt_upload: str | None,
-    reauthorize: Callable[[], None] | None = None,
+    reauthorize: Callable[[], None] = lambda: None,
 ):
     # A non-simple header requires CORS preflight, preventing cross-site form uploads.
     if x_receipt_upload != "1":
@@ -78,8 +78,7 @@ async def recognize_receipt_request(
             raise ApiError(413, "RECEIPT_IMAGE_SIZE", "图片须为 1 字节至 8 MB")
         raw.extend(chunk)
     image = await run_in_threadpool(normalize_image, bytes(raw), content_type)
-    if reauthorize is not None:
-        reauthorize()
+    reauthorize()
     result = await recognize_receipt(image, settings, user_id)
     return result
 

@@ -7,6 +7,7 @@ from app.models.expense import Expense
 from app.models.fx import FxRate, FxSyncRun
 from app.models.institution import Institution
 from app.models.operations import BackupExport, ImportJob
+from app.models.receipt_device import ReceiptDevice, ReceiptPairing
 from app.models.user import User
 
 __all__ = [
@@ -25,6 +26,8 @@ __all__ = [
     "ImportJob",
     "MonthlySnapshot",
     "Project",
+    "ReceiptDevice",
+    "ReceiptPairing",
     "User",
     "UserCurrency",
 ]

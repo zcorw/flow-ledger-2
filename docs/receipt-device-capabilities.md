@@ -1,5 +1,18 @@
 # Isolated receipt device capabilities
 
+## Relationship to the production glasses integration
+
+The deployed glasses use the separate, phone-approved receipt-only API described
+in [receipt device authorization](receipt-devices.md). Its persistent grants do
+not authorize expense creation. This module remains an unmounted experiment for
+receipt recognition plus explicitly confirmed expense creation; its short-lived
+grants and internal approval seam are not connected to the production phone UI.
+
+Production authorization tests remain in `test_receipt_devices.py`. The separate
+experimental regressions are in `test_isolated_receipt_devices.py`, preserving
+both suites when this branch follows current main. This draft does not mount the
+experimental router or change the deployed authorization policy.
+
 ## Delivery boundary
 
 This increment supplies an **unmounted**, synthetic-account HTTP integration in
