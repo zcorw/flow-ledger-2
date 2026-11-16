@@ -5,6 +5,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.asset import AccountResponse
+
+
+class ExpenseAccountResponse(AccountResponse):
+    institution_name: str | None = None
+
+
 ExpenseCategory = Literal[
     "uncategorized",
     "food",

@@ -259,3 +259,41 @@ test('unconfigured real backend disables uploads and preserves manual entry', as
   await dialog.getByRole('textbox', { name: '金额', exact: true }).fill('10');
   await expect(dialog.getByRole('button', { name: '确认保存', exact: true })).toBeEnabled();
 });
+
+test('payment account labels distinguish institutions and survive closing and editing', async ({ page }) => {
+  await login(page);
+  const accounts: string[] = [];
+  for (const name of ['Payment Bank A', 'Payment Bank B']) {
+    const institutionResponse = await page.request.post('/api/v1/institutions', {
+      data: { name, institutionType: 'bank' },
+    });
+    expect(institutionResponse.status()).toBe(201);
+    const institution = await institutionResponse.json();
+    const accountResponse = await page.request.post('/api/v1/accounts', {
+      data: { name: '资产账户', accountType: 'savings', institutionId: institution.id, maskedIdentifier: '尾号 1234' },
+    });
+    expect(accountResponse.status()).toBe(201);
+    accounts.push((await accountResponse.json()).id);
+  }
+  await page.reload();
+  await page.getByRole('button', { name: '记一笔', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '记录开销' });
+  await dialog.getByLabel('支付账户（可选）').click();
+  await expect(page.getByRole('option', { name: 'Payment Bank A · 资产账户 · 尾号 1234', exact: true })).toBeVisible();
+  await page.getByRole('option', { name: 'Payment Bank B · 资产账户 · 尾号 1234', exact: true }).click();
+  await dialog.getByRole('textbox', { name: '金额', exact: true }).fill('25');
+  await dialog.getByLabel('商户（可选）').fill('Payment label test');
+  await dialog.getByRole('button', { name: '返回（保留草稿）' }).click();
+  await page.getByRole('button', { name: '继续草稿' }).click();
+  await expect(dialog.getByLabel('支付账户（可选）')).toContainText('Payment Bank B');
+  const saved = page.waitForRequest((r) => r.url().endsWith('/api/v1/expenses') && r.method() === 'POST');
+  await dialog.getByRole('button', { name: '确认保存', exact: true }).click();
+  expect((await saved).postDataJSON().accountId).toBe(accounts[1]);
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole('table').getByText('Payment Bank B · 资产账户 · 尾号 1234', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '编辑开销 Payment label test' }).filter({ visible: true }).click();
+  const edit = page.getByRole('dialog', { name: '编辑开销' });
+  await expect(edit.getByLabel('支付账户（可选）')).toContainText('Payment Bank B');
+  await edit.getByRole('button', { name: '返回（保留草稿）' }).click();
+  await expect(edit).not.toBeVisible();
+});

@@ -31,7 +31,8 @@ export const listExpenses = (filters: Filters, page: number) => {
   Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value); });
   return apiRequest<ExpenseList>(`/expenses?${params}`);
 };
-export const getExpenseAccounts = () => apiRequest<Account[]>('/expenses/accounts');
+export type ExpenseAccount = Account & { institution_name?: string | null };
+export const getExpenseAccounts = () => apiRequest<ExpenseAccount[]>('/expenses/accounts');
 export const createExpense = (input: ExpenseInput) => apiRequest<Expense>('/expenses', { method: 'POST', body: JSON.stringify(input) });
 export const updateExpense = (id: string, input: ExpenseFields) => apiRequest<Expense>(`/expenses/${id}`, { method: 'PUT', body: JSON.stringify(input) });
 export const deleteExpense = (id: string) => apiRequest<void>(`/expenses/${id}`, { method: 'DELETE' });
