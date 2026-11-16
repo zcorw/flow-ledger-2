@@ -12,6 +12,7 @@ const MasterDataPage = lazy(() => import('./features/assets/MasterDataPage').the
 const HistoryPage = lazy(() => import('./features/history/HistoryPage').then((module) => ({ default: module.HistoryPage })));
 const DebtPage = lazy(() => import('./features/debts/DebtPage').then((module) => ({ default: module.DebtPage })));
 const ExpensePage = lazy(() => import('./features/expenses/ExpensePage').then((module) => ({ default: module.ExpensePage })));
+const ReceiptDevicesPage = lazy(() => import('./features/devices/ReceiptDevicesPage').then((module) => ({ default: module.ReceiptDevicesPage })));
 const CurrencySettingsPage = lazy(() => import('./features/settings/CurrencySettingsPage').then((module) => ({ default: module.CurrencySettingsPage })));
 
 function RouteFallback() {
@@ -37,6 +38,7 @@ export function App() {
               <Route path="history" element={<HistoryPage />} />
               <Route path="debts" element={<DebtPage />} />
               <Route path="expenses" element={<ExpensePage />} />
+              <Route path="receipt-devices" element={<ReceiptDevicesPage />} />
               <Route path="settings" element={<CurrencySettingsPage />} />
             </Route>
           </Route>

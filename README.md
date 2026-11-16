@@ -1,91 +1,104 @@
 # Flow Ledger
 
-Flow Ledger 是一个面向个人使用的私有资产管理 Web 应用。它以月度快照为核心，集中管理机构、账户、资产项目、历史汇率和债权债务，并将不同币种统一折算为人民币，用于查看总资产、总负债、净资产及其月度变化。
+**English** | [简体中文](README.zh-CN.md)
 
-项目以月度资产快照为核心，也提供独立的每日开销记录；不连接银行或券商 API，不计算真实投资收益率。
+Flow Ledger is a private, personal asset-management web application. Built around monthly snapshots, it brings institutions, accounts, asset items, historical exchange rates, receivables, and liabilities into one place. Balances in different currencies are converted to CNY, making it easy to track total assets, total liabilities, net worth, and month-over-month changes.
 
-## 主要功能
+The project centers on monthly asset snapshots and also supports independent daily expense records. It does not connect to banking or brokerage APIs, nor does it calculate actual investment returns.
 
-- 首页看板：按月份查看总资产、总负债、净资产、较上月变化和外币资产占比。
-- 净资产趋势：支持最近 12 个月、最近 24 个月和全部历史。
-- 资产层级：按“机构 → 账户 → 项目”维护资产，账户也可以先创建、后关联机构。
-- 月度快照：批量录入资产余额，自动按历史汇率折算 CNY，并支持修改单条金额与日期。
-- 债权债务：通过新增、还款、调整和结清事件计算指定月份的未偿本金。
-- 汇率管理：定时同步启用币种的汇率，也支持导入历史汇率。
-- 导入导出：集中导入或导出主数据、历史汇率、月度快照和债权债务事件。
-- 账户资料：修改管理员显示名称和密码。
-- 运维能力：数据库迁移、健康检查、审计日志、生产部署和定时备份。
+> [!NOTE]
+> flow-ledger-2 is the second-generation, full-stack rewrite of
+> FlowLedger. It replaces the original split-repository implementation:
+>
+> - [FlowLedger-ui](https://github.com/zcorw/FlowLedger-ui) — v1 frontend
+> - [FlowLedger-server](https://github.com/zcorw/FlowLedger-server) — v1 backend
 
-## 收据拍照识别
+## Features
 
-每日开销支持手工录入和图片辅助填写。图片识别通过后端调用 OpenAI Responses API，默认低成本模型为 `gpt-6-luna`；金额、日期、币种和商户均需人工核对后保存，不影响月度资产统计。
+- Dashboard: view total assets, total liabilities, net worth, changes from the previous month, and the share of assets held in foreign currencies.
+- Net-worth trends: review the most recent 12 months, 24 months, or the complete history.
+- Asset hierarchy: manage assets as “institution → account → item”; accounts can also be created before they are linked to an institution.
+- Monthly snapshots: enter asset balances in bulk, automatically convert them to CNY using historical exchange rates, and edit individual amounts and dates.
+- Receivables and liabilities: calculate outstanding principal for a selected month using creation, repayment, adjustment, and settlement events.
+- Exchange-rate management: periodically synchronize rates for enabled currencies or import historical exchange rates.
+- Import and export: centrally import or export master data, historical exchange rates, monthly snapshots, and receivable/liability events.
+- Account profile: update the administrator display name and password.
+- Operations: database migrations, health checks, audit logs, production deployment, and scheduled backups.
 
-在后端使用的 `.env`（生产环境为部署所用环境文件）设置 `OPENAI_API_KEY`，可用 `RECEIPT_MODEL` 调整模型。密钥不得使用 `VITE_` 前缀或放入前端。未配置时仍可手工录入。图片会发送给 OpenAI，可能产生费用；本应用不保存图片或识别原文。完整配置、费用控制与隐私边界见 [收据识别说明](docs/10-openai-receipts.md)。
+## Receipt Photo Recognition
 
-### OpenAI 配置
+Daily expenses support manual entry and image-assisted filling. The backend calls the OpenAI Responses API, with the default low-cost model `gpt-6-luna`. Review amount, date, currency and merchant before saving. Daily expenses do not affect monthly asset statistics.
 
-本地开发在根目录 `.env`、生产环境在 `deploy/.env.production` 中填写以下配置。先在 OpenAI 控制台创建项目 API 密钥，并替换示例中的占位文字。
+Set `OPENAI_API_KEY` only in the backend environment file; use `RECEIPT_MODEL` to change models. Never prefix the key with `VITE_` or expose it in the frontend. Manual entry remains available without a key. Photos are sent to OpenAI and may incur charges; the application does not save photos or raw recognition text. See [receipt configuration, cost controls and privacy](docs/10-openai-receipts.md).
+
+### OpenAI Configuration
+
+Configure the root `.env` for local development or `deploy/.env.production` for production. Create a project API key in the OpenAI console and replace the placeholder:
 
 ```dotenv
-OPENAI_API_KEY=在此设置你自己的服务端项目密钥
+OPENAI_API_KEY=your-server-project-key
 RECEIPT_MODEL=gpt-6-luna
 RECEIPT_TIMEOUT_SECONDS=45
 RECEIPT_REQUESTS_PER_MINUTE=6
 ```
 
-已有本地 Docker 环境修改配置后，在项目根目录执行 `docker compose up -d --build --no-deps --force-recreate backend`，然后登录并刷新“每日开销”页面。直接运行 Python 时需重启后端进程。生产环境生效命令、配置检查及常见错误见 [OpenAI 配置步骤](docs/10-openai-receipts.md#模型与配置)。
+For an existing local Docker deployment, run `docker compose up -d --build --no-deps --force-recreate backend` at the project root, then sign in and refresh Daily Expenses. Restart the backend process when running Python directly. Production commands and troubleshooting are documented in [OpenAI configuration](docs/10-openai-receipts.md#模型与配置).
 
-## 首页统计口径
+## Rokid Device Authorization
 
-- 首页只统计所选自然月内的月度快照。
-- 同一项目当月有多条记录时，取日期最晚的一条。
-- 项目当月没有记录时，不沿用以前月份的数据。
-- 只要当月存在记录，即使机构、账户或项目当前已停用，仍计入当月资产和净资产趋势。
-- 债权按月末未偿本金计入总资产，债务按月末未偿本金计入总负债。
+Sign in on the phone at `/receipt-devices`, enter the glasses code and explicitly approve receipt recognition. Pairing lasts 10 minutes; the receipt-only grant remains valid until revoked or the account password changes. The glasses remember it across Agent exit and device restart; clearing Agent data requires authorization again. The grant cannot create expenses or modify assets; it can be revoked from the same page. Deploy both frontend/backend, run migration `0012_persistent_devices` and use the canonical HTTPS `APP_BASE_URL` before updating the glasses. See [device protocol and deployment](docs/receipt-devices.md).
 
-## 技术栈
+## Dashboard Calculation Rules
 
-| 层级 | 技术 |
+- The dashboard only includes monthly snapshots recorded within the selected calendar month.
+- If an item has multiple records in the same month, the latest record by date is used.
+- If an item has no record for the selected month, data from earlier months is not carried forward.
+- Any record in the selected month is included in assets and net-worth trends, even if its institution, account, or item is currently disabled.
+- Receivables count toward total assets at their month-end outstanding principal; liabilities count toward total liabilities on the same basis.
+
+## Technology Stack
+
+| Layer | Technology |
 | --- | --- |
-| 前端 | React 19、TypeScript、Vite、MUI、TanStack Query、ECharts |
-| 后端 | FastAPI、SQLAlchemy、Alembic、Pydantic |
-| 数据库 | PostgreSQL 16 |
-| 定时任务 | APScheduler |
-| 部署 | Docker Compose、Nginx；生产入口可选容器 Caddy 或宿主机代理 |
-| 测试 | Vitest、Pytest、Playwright |
+| Frontend | React 19, TypeScript, Vite, MUI, TanStack Query, ECharts |
+| Backend | FastAPI, SQLAlchemy, Alembic, Pydantic |
+| Database | PostgreSQL 16 |
+| Scheduled jobs | APScheduler |
+| Deployment | Docker Compose, Nginx; production ingress via optional containerized Caddy or a host-level reverse proxy |
+| Testing | Vitest, Pytest, Playwright |
 
-## 快速启动
+## Quick Start
 
-### 环境要求
+### Prerequisites
 
-- Docker Engine 或 Docker Desktop
+- Docker Engine or Docker Desktop
 - Docker Compose v2
 
-### 1. 创建本地配置
+### 1. Create a local configuration
 
-PowerShell：
+PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-macOS / Linux：
+macOS / Linux:
 
 ```bash
 cp .env.example .env
 ```
 
-打开 `.env`，至少替换以下配置中的示例值：
+Open `.env` and replace at least the following example values:
 
 ```env
-SECRET_KEY=一段至少32位的随机字符串
-BOOTSTRAP_TOKEN=用于首次初始化的随机令牌
-POSTGRES_PASSWORD=本地数据库密码
+SECRET_KEY=a-random-string-at-least-32-characters-long
+BOOTSTRAP_TOKEN=a-random-token-used-for-first-time-setup
+POSTGRES_PASSWORD=your-local-database-password
 ```
 
-如果修改了 `POSTGRES_PASSWORD`，请同步修改 `DATABASE_URL` 中的密码。
+If you change `POSTGRES_PASSWORD`, update the password in `DATABASE_URL` as well.
 
-### 2. 初始化数据库并启动服务
+### 2. Initialize the database and start the services
 
 ```bash
 docker compose up -d postgres
@@ -93,55 +106,55 @@ docker compose run --rm backend alembic upgrade head
 docker compose up -d --build
 ```
 
-查看服务状态：
+Check the service status:
 
 ```bash
 docker compose ps
 ```
 
-启动成功后可访问：
+Once the services are running, open:
 
-| 服务 | 地址 |
+| Service | URL |
 | --- | --- |
-| Web 页面 | http://localhost:3000 |
-| API 文档（开发环境） | http://localhost:8000/api/docs |
-| 健康检查 | http://localhost:8000/api/v1/system/health |
+| Web application | http://localhost:3000 |
+| API documentation (development only) | http://localhost:8000/api/docs |
+| Health check | http://localhost:8000/api/v1/system/health |
 
-停止服务：
+Stop the services with:
 
 ```bash
 docker compose down
 ```
 
-上述停止命令会保留 PostgreSQL 数据卷。
+This command preserves the PostgreSQL data volume.
 
-## 初始化管理员账号
+## Initialize the Administrator Account
 
-系统没有默认账号或默认密码。
+The system has no default account or password.
 
-1. 第一次打开 `http://localhost:3000` 时，系统会自动进入初始化页面。
-2. 输入 `.env` 中设置的 `BOOTSTRAP_TOKEN`。
-3. 设置管理员邮箱、显示名称和至少 12 位的密码。
-4. 初始化完成后，`/setup` 入口自动失效，之后使用该邮箱和密码登录。
+1. Open `http://localhost:3000` for the first time. The application automatically redirects to the setup page.
+2. Enter the `BOOTSTRAP_TOKEN` configured in `.env`.
+3. Set the administrator email address, display name, and a password of at least 12 characters.
+4. After initialization, the `/setup` route is automatically disabled. Use the configured email address and password for subsequent sign-ins.
 
-忘记密码时无法从环境变量找回原密码；已登录用户可以在账户资料中修改密码。
+A forgotten password cannot be recovered from environment variables. A signed-in user can change the password from the account profile.
 
-## 推荐的数据录入顺序
+## Recommended Data-Entry Order
 
-首次使用可以手动创建数据，也可以在“设置 → 导入、导出与恢复”中按以下顺序导入：
+When using the application for the first time, you can create data manually or import it from “Settings → Import, Export & Recovery” in this order:
 
-1. 机构、账户与项目
-2. 历史汇率
-3. 月度快照
-4. 债权债务事件
+1. Institutions, accounts, and items
+2. Historical exchange rates
+3. Monthly snapshots
+4. Receivable and liability events
 
-建议先下载对应 CSV 模板并参考模板中的类型值。系统会先校验整份文件；存在业务冲突时会拒绝整批导入，避免写入部分脏数据。历史汇率会按“币种 + 日期 + 来源”更新同键记录。
+Download the relevant CSV templates first and refer to their supported type values. The system validates the entire file before writing any data; if it finds a business conflict, the complete batch is rejected to prevent partial or inconsistent imports. Historical exchange rates update matching records by “currency + date + source.”
 
-## 本地开发
+## Local Development
 
-除 Docker 外，本地开发需要 Node.js 22、pnpm 10.33.1 和 Python 3.11。
+In addition to Docker, local development requires Node.js 22, pnpm 10.33.1, and Python 3.11.
 
-安装前端依赖并启动开发服务器：
+Install the frontend dependencies and start the development server:
 
 ```bash
 corepack enable
@@ -149,16 +162,16 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-前端开发服务器默认运行在 `http://localhost:5173`，并将 `/api` 请求代理到 `http://localhost:8000`。
+The frontend development server runs at `http://localhost:5173` by default and proxies `/api` requests to `http://localhost:8000`.
 
-安装后端开发依赖并启动 API：
+Install the backend development dependencies and start the API:
 
 ```bash
 cd backend
 python -m venv .venv
 ```
 
-激活虚拟环境：
+Activate the virtual environment:
 
 ```powershell
 # Windows PowerShell
@@ -170,7 +183,7 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
-将 `DATABASE_URL` 设置为宿主机可以访问的 PostgreSQL 或 SQLite 地址，然后运行：
+Set `DATABASE_URL` to a PostgreSQL or SQLite address that is accessible from the host, then run:
 
 ```bash
 python -m pip install -e ".[dev]"
@@ -178,11 +191,11 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Compose 默认没有将 PostgreSQL 端口暴露给宿主机，因此不能直接使用 `.env.example` 中主机名为 `postgres` 的连接地址启动宿主机后端；也可以继续让后端运行在 Docker 中，只在宿主机启动前端开发服务器。
+By default, Compose does not expose the PostgreSQL port to the host. Therefore, the connection string from `.env.example`, whose hostname is `postgres`, cannot be used directly by a backend running on the host. Alternatively, keep the backend in Docker and run only the frontend development server on the host.
 
-## 测试与质量检查
+## Testing and Quality Checks
 
-前端：
+Frontend:
 
 ```bash
 pnpm lint
@@ -192,7 +205,7 @@ pnpm build
 pnpm bundle:check
 ```
 
-后端：
+Backend:
 
 ```bash
 cd backend
@@ -200,54 +213,54 @@ ruff check .
 pytest
 ```
 
-端到端测试：
+End-to-end tests:
 
 ```bash
 pnpm exec playwright install chromium
 pnpm e2e
 ```
 
-## 项目结构
+## Project Structure
 
 ```text
 Flow-Ledger2/
-├── backend/                 FastAPI、数据模型、迁移和后端测试
-├── frontend/                React 前端应用
-├── e2e/                     Playwright 端到端测试
-├── deploy/                  生产 Compose、可选代理、备份和部署脚本
-├── docs/                    产品、交互、数据模型、API 和运维文档
-├── prototype/               静态页面与设计原型
-├── scripts/                 工程检查脚本
-├── docker-compose.yml       本地开发与集成环境
-└── package.json             Monorepo 前端命令入口
+├── backend/                 FastAPI, data models, migrations, and backend tests
+├── frontend/                React frontend application
+├── e2e/                     Playwright end-to-end tests
+├── deploy/                  Production Compose, optional proxy, backup, and deployment scripts
+├── docs/                    Product, UX, data model, API, and operations documentation
+├── prototype/               Static pages and design prototypes
+├── scripts/                 Engineering checks
+├── docker-compose.yml       Local development and integration environment
+└── package.json             Monorepo frontend command entry point
 ```
 
-## 生产部署与备份
+## Production Deployment and Backups
 
-根目录的 `docker-compose.yml` 用于本地开发和集成测试。生产环境请使用 [deploy/README.md](deploy/README.md) 中的部署方案。部署者可以通过 `PROXY_MODE=caddy` 自动启动容器 Caddy，也可以设置 `PROXY_MODE=external`，将应用交给宿主机已有的 Nginx、Traefik 或其他代理。
+The root-level `docker-compose.yml` is intended for local development and integration testing. For production, follow [deploy/README.md](deploy/README.md). Operators can set `PROXY_MODE=caddy` to start a containerized Caddy instance automatically, or set `PROXY_MODE=external` to place the application behind an existing host-level Nginx, Traefik, or other reverse proxy.
 
-- 可选择的 Caddy 或外部代理入口
-- 生产环境变量校验
-- Alembic 数据库迁移
-- 健康检查
-- PostgreSQL 定时备份与校验
-- 恢复、发布和回滚流程
+- Optional Caddy or external reverse-proxy ingress
+- Production environment-variable validation
+- Alembic database migrations
+- Health checks
+- Scheduled PostgreSQL backups and verification
+- Restore, release, and rollback procedures
 
-## 项目文档
+## Project Documentation
 
-- [产品总文档](docs/00-master-spec.md)
-- [产品需求](docs/01-prd.md)
-- [交互规范](docs/02-ux-spec.md)
-- [数据模型](docs/03-data-model.md)
-- [API 规范](docs/04-api-spec.md)
-- [实现计划](docs/05-implementation-plan.md)
-- [部署与运维](docs/06-deployment-ops.md)
-- [OpenAI 收据识别与配置](docs/10-openai-receipts.md)
-- [质量预算](docs/quality-budgets.md)
+- [Master specification](docs/00-master-spec.md)
+- [Product requirements](docs/01-prd.md)
+- [UX specification](docs/02-ux-spec.md)
+- [Data model](docs/03-data-model.md)
+- [API specification](docs/04-api-spec.md)
+- [Implementation plan](docs/05-implementation-plan.md)
+- [Deployment and operations](docs/06-deployment-ops.md)
+- [OpenAI receipt recognition and configuration](docs/10-openai-receipts.md)
+- [Quality budgets](docs/quality-budgets.md)
 
-## 安全说明
+## Security Notes
 
-- 不要提交 `.env`、生产密钥、数据库备份或导出的真实资产数据。
-- 生产环境必须使用随机且足够长的 `SECRET_KEY`、`BOOTSTRAP_TOKEN` 和数据库密码。
-- 不要在系统中保存完整银行卡号、券商账号、密钥或银行登录凭据，账户标识应使用脱敏尾号或自定义简称。
-- 完成管理员初始化后，建议轮换 `BOOTSTRAP_TOKEN`。
+- Do not commit `.env`, production secrets, database backups, or exports containing real asset data.
+- Production environments must use random, sufficiently long values for `SECRET_KEY`, `BOOTSTRAP_TOKEN`, and the database password.
+- Do not store full bank-card numbers, brokerage account numbers, secret keys, or online-banking credentials. Use masked suffixes or custom aliases for account identifiers.
+- Rotate `BOOTSTRAP_TOKEN` after the administrator account has been initialized.
