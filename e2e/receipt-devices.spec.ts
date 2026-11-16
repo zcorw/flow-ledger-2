@@ -36,6 +36,11 @@ test('phone login returns to device consent; matching code requires explicit app
     await page.waitForTimeout(3100);
     expect((await poll()).status()).toBe(202);
     await page.getByRole('checkbox', { name: '我已核对，授权码与眼镜显示一致' }).check();
+    await expect(approve).toBeEnabled();
+    // Scan the enabled state after its CSS color transitions have finished.
+    await approve.evaluate(async element => {
+      await Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})));
+    });
 
     const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
     expect(axe.violations.filter(v => v.impact === 'critical' || v.impact === 'serious')).toEqual([]);
