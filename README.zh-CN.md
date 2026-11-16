@@ -238,6 +238,8 @@ Flow-Ledger2/
 
 根目录的 `docker-compose.yml` 用于本地开发和集成测试。生产环境请使用 [deploy/README.md](deploy/README.md) 中的部署方案。部署者可以通过 `PROXY_MODE=caddy` 自动启动容器 Caddy，也可以设置 `PROXY_MODE=external`，将应用交给宿主机已有的 Nginx、Traefik 或其他代理。
 
+GitHub Actions 会在主分支提交通过 CI、且两个 SHA 标签镜像均发布成功后部署。手动运行生产部署必须选择 `main`，会在连接 VPS 前等待同一提交的 CI 和镜像发布，最长 20 分钟。CI 失败或镜像任务缺失、被跳过时，会在修改服务器前停止。
+
 - 可选择的 Caddy 或外部代理入口
 - 生产环境变量校验
 - Alembic 数据库迁移

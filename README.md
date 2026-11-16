@@ -239,6 +239,8 @@ Flow-Ledger2/
 
 The root-level `docker-compose.yml` is intended for local development and integration testing. For production, follow [deploy/README.md](deploy/README.md). Operators can set `PROXY_MODE=caddy` to start a containerized Caddy instance automatically, or set `PROXY_MODE=external` to place the application behind an existing host-level Nginx, Traefik, or other reverse proxy.
 
+GitHub Actions deploys a main commit after CI and both SHA-tagged images succeed. A manual production run must select `main`; it waits up to 20 minutes for that exact commit's CI and image publication before connecting to the VPS. Failed CI or missing/skipped image jobs stop deployment before any server changes.
+
 - Optional Caddy or external reverse-proxy ingress
 - Production environment-variable validation
 - Alembic database migrations

@@ -48,6 +48,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test production release gate
+        run: node --test scripts/wait-for-release.test.cjs
       - name: Validate deployment scripts
         run: sh -n deploy/compose.sh deploy/deploy.sh deploy/verify.sh
       - name: Validate Caddy deployment mode
