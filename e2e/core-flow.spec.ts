@@ -137,6 +137,8 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await amountInput.press('Tab');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('月度快照已保存')).toBeVisible();
+  // Scan the stable grid after the toast finishes fading; keep contrast checks enabled.
+  await expect(page.getByText('月度快照已保存')).toBeHidden();
   await expectNoSeriousAccessibilityIssues(page, 'snapshot-grid');
 
   await page.getByLabel('快照日期').fill('2026-08-31');
