@@ -19,11 +19,26 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     environment: production
     permissions:
       contents: read
       packages: read
+      actions: read
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - name: Wait for verified CI and published images
+        id: release
+        uses: actions/github-script@v7
+        env:
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        with:
+          script: |
+            const waitForRelease = require('./scripts/wait-for-release.cjs');
+            await waitForRelease({ github, context, core, sha: process.env.DEPLOY_SHA });
       - name: Configure SSH
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -50,7 +65,7 @@ jobs:
               "docker login ghcr.io --username '$GHCR_USER' --password-stdin"
       - name: Deploy verified main revision
         env:
-          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          DEPLOY_SHA: ${{ steps.release.outputs.sha }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_PATH: ${{ secrets.VPS_PATH }}
           VPS_USER: ${{ secrets.VPS_USER }}

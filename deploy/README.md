@@ -277,6 +277,10 @@ ghcr.io/zcorw/flow-ledger-frontend:<commit-sha>
 
 同时更新两个镜像的 `latest` 标签，供手动部署使用。`.github/workflows/deploy.yml` 等待整个 `CI`（包括镜像发布）成功后，将同一个提交 SHA 传给 VPS。VPS 使用该 SHA 拉取不可混淆的前后端版本，不再运行 `pip install`、`pnpm install` 或前端编译。自动部署通过仓库自带的 `GITHUB_TOKEN` 获得 GHCR 读取权限，不需要新增 GitHub Secret。
 
+在 Actions 手动运行 `Deploy production` 时必须选择 `main`。工作流先检查同一提交的主分支 push CI 和 `Publish backend image`、`Publish frontend image` 两个镜像任务；CI 尚未完成时最多等待 20 分钟，全部成功后才配置 SSH 并连接 VPS。CI 失败、取消或任一镜像任务未成功时会明确停止，不会尝试拉取尚未发布的 SHA 标签。手动部署新增的 `actions: read` 权限只用于读取这些检查记录，不需要额外配置令牌。
+
+`manifest unknown` 表示请求的镜像标签不存在，例如刚合并就提前启动了旧版手动部署。优先查看该提交的 CI 和镜像发布状态；正常情况下无需再次手动运行，CI 完成后会自动部署。失败的历史手动运行不会因为后续自动部署成功而变绿，应以同一 SHA 最新的自动部署与线上健康检查为准。
+
 代理模式仍由 VPS 上的 `.env.production` 决定，无需为两种模式创建不同工作流。GitHub 仓库或组织策略必须允许 Actions 对 Packages 使用读写权限；如果 GHCR 返回 `denied`，还需在对应 Package 的设置中确认本仓库拥有 Actions 访问权限。
 
 需要配置：
