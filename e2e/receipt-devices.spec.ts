@@ -55,5 +55,18 @@ test('phone login returns to device consent; matching code requires explicit app
     await expect(page.getByText('暂无有效设备授权。')).toBeVisible();
     const denied = await device.post(prefix + '/receipt-recognition', { headers: { Authorization: 'Bearer ' + grant.accessToken, 'X-Receipt-Upload': '1', 'Content-Type': 'image/png' }, data: Buffer.from('synthetic') });
     expect(denied.status()).toBe(401);
+    for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport);
+      await page.getByRole('link', { name: '返回设置' }).click();
+      await expect(page.getByRole('heading', { level: 1, name: '设置', exact: true })).toBeVisible();
+      await page.getByRole('link', { name: '管理设备授权' }).click();
+      await expect(page).toHaveURL(/\/receipt-devices$/);
+      await expect(page.getByRole('heading', { level: 1, name: '设备授权', exact: true })).toBeVisible();
+      if (viewport.width >= 900) {
+        const navigation = page.getByRole('navigation', { name: '主要导航' });
+        await expect(navigation.getByRole('button', { name: '设备授权', exact: true })).toHaveCount(0);
+        await expect(navigation.getByRole('button', { name: '设置', exact: true })).toHaveAttribute('aria-current', 'page');
+      }
+    }
   } finally { await device.dispose(); }
 });

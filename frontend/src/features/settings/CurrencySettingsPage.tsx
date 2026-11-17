@@ -1,9 +1,11 @@
 import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined';
 import CurrencyExchangeOutlined from '@mui/icons-material/CurrencyExchangeOutlined';
 import RefreshOutlined from '@mui/icons-material/RefreshOutlined';
+import DevicesOutlined from '@mui/icons-material/DevicesOutlined';
 import { Alert, Box, Button, Chip, CircularProgress, Paper, Snackbar, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import { ApiClientError } from '../../api/client';
 import { AccountProfileSettings } from './AccountProfileSettings';
 import { getCurrencies, getFxSyncRuns, getLatestRates, syncFxRates, updateCurrencies } from './api';
@@ -58,8 +60,14 @@ export function CurrencySettingsPage() {
 
   return (
     <Stack spacing={2.5} sx={{ maxWidth: 980, mx: 'auto' }}>
-      <Box><Typography variant="h4" component="h1" sx={{ fontWeight: 780 }}>设置</Typography><Typography sx={{ mt: 0.5, color: 'text.secondary', fontSize: 13 }}>管理账户安全、币种汇率以及数据导入导出。</Typography></Box>
+      <Box><Typography variant="h4" component="h1" sx={{ fontWeight: 780 }}>设置</Typography><Typography sx={{ mt: 0.5, color: 'text.secondary', fontSize: 13 }}>管理账户安全、设备授权、币种汇率以及数据导入导出。</Typography></Box>
       <AccountProfileSettings />
+      <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2.5 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}>
+          <Box><Typography component="h2" variant="h6">设备授权</Typography><Typography sx={{ color: 'text.secondary', fontSize: 13, mt: 0.5 }}>绑定眼镜以识别收据，查看或撤销已有授权。</Typography></Box>
+          <Button component={RouterLink} to="/receipt-devices" variant="outlined" startIcon={<DevicesOutlined />}>管理设备授权</Button>
+        </Stack>
+      </Paper>
       <Box sx={{ pt: 1 }}><Typography variant="h5" component="h2" sx={{ fontWeight: 700 }}>币种与汇率</Typography><Typography sx={{ mt: 0.5, color: 'text.secondary', fontSize: 13 }}>配置资产使用的币种，并管理历史 CNY 折算汇率。</Typography></Box>
       {error && <Alert severity="error">{error instanceof ApiClientError ? error.message : '操作失败'}</Alert>}
       <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2.5 }}>

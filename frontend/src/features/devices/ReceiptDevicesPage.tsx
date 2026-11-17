@@ -1,7 +1,7 @@
 import { Alert, Box, Button, Checkbox, FormControlLabel, Paper, Stack, TextField, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../../api/client';
 import { decidePairing, getPairing, listReceiptDevices, revokeReceiptDevice } from './api';
 
@@ -27,6 +27,7 @@ export function ReceiptDevicesPage() {
   const codeValid = /^[A-HJ-NP-Z2-9]{8}$/.test(normalized(code));
   return (
     <Stack spacing={3} sx={{ maxWidth: 720 }}>
+      <Button component={RouterLink} to="/settings" sx={{ alignSelf: 'flex-start' }}>返回设置</Button>
       <Box>
         <Typography component="h1" variant="h4" data-page-title>设备授权</Typography>
         <Typography color="text.secondary" sx={{ mt: 1 }}>输入眼镜上显示的授权码，核对后允许它识别收据。</Typography>

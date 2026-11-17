@@ -46,7 +46,7 @@ For an existing local Docker deployment, run `docker compose up -d --build --no-
 
 ## Rokid Device Authorization
 
-Sign in on the phone at `/receipt-devices`, enter the glasses code and explicitly approve receipt recognition. Pairing lasts 10 minutes; the receipt-only grant remains valid until revoked or the account password changes. The glasses remember it across Agent exit and device restart; clearing Agent data requires authorization again. The grant cannot create expenses or modify assets; it can be revoked from the same page. Deploy both frontend/backend, run migration `0012_persistent_devices` and use the canonical HTTPS `APP_BASE_URL` before updating the glasses. See [device protocol and deployment](docs/receipt-devices.md).
+Sign in on the phone and open **Settings → Device authorization**, enter the glasses code and explicitly approve receipt recognition. The direct `/receipt-devices` URL remains available for glasses pairing links. Pairing lasts 10 minutes; the receipt-only grant remains valid until revoked or the account password changes. The glasses remember it across Agent exit and device restart; clearing Agent data requires authorization again. The grant cannot create expenses or modify assets; it can be revoked from the same page. Deploy both frontend/backend, run migration `0012_persistent_devices` and use the canonical HTTPS `APP_BASE_URL` before updating the glasses. See [device protocol and deployment](docs/receipt-devices.md).
 
 ## Dashboard Calculation Rules
 

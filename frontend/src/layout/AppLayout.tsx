@@ -34,7 +34,6 @@ const navItems = [
   { icon: <DashboardOutlined />, label: '首页看板', path: '/' },
   { icon: <CalendarMonthOutlined />, label: '月度快照', path: '/snapshots' },
   { icon: <ReceiptLongOutlined />, label: '每日开销', path: '/expenses' },
-  { icon: <ReceiptLongOutlined />, label: '设备授权', path: '/receipt-devices' },
   { icon: <AccountBalanceOutlined />, label: '机构与账户', path: '/institutions' },
   { icon: <SwapHorizOutlined />, label: '债权债务', path: '/debts' },
   { icon: <SettingsOutlined />, label: '设置', path: '/settings' },
@@ -79,7 +78,7 @@ export function AppLayout() {
   }, [mobileOpen]);
   const activeItem = location.pathname === '/history'
     ? { label: '历史快照', path: '/history' }
-    : (navItems.find((item) => item.path === location.pathname) ?? navItems[0]);
+    : (navItems.find((item) => item.path === (location.pathname === '/receipt-devices' ? '/settings' : location.pathname)) ?? navItems[0]);
   const compactPageTitle = useCompactPageTitle(location.pathname, activeItem.label, Boolean(user));
   if (!user) return null;
 

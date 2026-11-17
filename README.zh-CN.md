@@ -45,7 +45,7 @@ RECEIPT_REQUESTS_PER_MINUTE=6
 
 ## Rokid 设备授权
 
-手机登录后访问 `/receipt-devices`，输入眼镜授权码并明确允许收据识别。配对码 10 分钟有效，识别专用授权长期有效，直到撤销或修改账号密码。眼镜退出 Agent 或重启后自动恢复授权，清除 Agent 数据后需重新授权。授权不能创建开销或修改资产；可在同页撤销。更新眼镜前应配套部署前后端、执行迁移 `0012_persistent_devices`，并设置规范 HTTPS `APP_BASE_URL`。详见[设备协议及部署](docs/receipt-devices.zh-CN.md)。
+手机登录后从 **设置 → 设备授权** 进入，输入眼镜授权码并明确允许收据识别。保留 `/receipt-devices` 直达地址供眼镜配对链接使用。配对码 10 分钟有效，识别专用授权长期有效，直到撤销或修改账号密码。眼镜退出 Agent 或重启后自动恢复授权，清除 Agent 数据后需重新授权。授权不能创建开销或修改资产；可在同页撤销。更新眼镜前应配套部署前后端、执行迁移 `0012_persistent_devices`，并设置规范 HTTPS `APP_BASE_URL`。详见[设备协议及部署](docs/receipt-devices.zh-CN.md)。
 
 ## 首页统计口径
 
