@@ -7,17 +7,21 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
+from pydantic import ValidationError
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import CurrentAuthDependency
 from app.api.expenses import recognize_receipt_request
+from app.core.config import get_settings
 from app.core.errors import ApiError, api_error_handler
 from app.db.session import get_db
 from app.models.audit import AuditLog
 from app.models.receipt_device import ReceiptDevice
 from app.schemas.receipt import ReceiptCandidate
+from app.schemas.receipt_review import CorrectionRequest
 from app.services import receipt_device as devices
+from app.services import receipt_review
 
 Db = Annotated[Session, Depends(get_db)]
 
@@ -44,12 +48,12 @@ class PrivateRoute(APIRoute):
 router = APIRouter(route_class=PrivateRoute)
 
 
-async def read_json(request: Request, allowed: set[str]) -> dict:
+async def read_json(request: Request, allowed: set[str], max_bytes: int = 4096) -> dict:
     if request.headers.get("content-type", "").split(";", 1)[0] != "application/json":
         raise ApiError(415, "DEVICE_CONTENT_TYPE", "请提交 JSON")
     raw = bytearray()
     async for chunk in request.stream():
-        if len(raw) + len(chunk) > 4096:
+        if len(raw) + len(chunk) > max_bytes:
             raise ApiError(413, "DEVICE_BODY_LIMIT", "请求过大")
         raw.extend(chunk)
     try:
@@ -87,6 +91,21 @@ async def token(request: Request, response: Response, db: Db):
     result = devices.exchange_pairing(db, code)
     if result.get("status") == "authorization_pending":
         response.status_code = 202
+    return result
+
+
+@router.post("/review-correction")
+async def review_correction(request: Request, db: Db):
+    authorization = request.headers.get("authorization", "")
+    grant = devices.authenticate_device(db, authorization)
+    body = await read_json(request, {"transcript", "values"}, 16384)
+    try:
+        payload = CorrectionRequest.model_validate(body)
+    except ValidationError:
+        raise ApiError(422, "REVIEW_FIELDS_INVALID", "语音或账单字段无效") from None
+    result = await receipt_review.correct(db, grant.user_id, payload, get_settings())
+    db.expire_all()
+    devices.authenticate_device(db, authorization)
     return result
 
 
