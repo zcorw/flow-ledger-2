@@ -221,12 +221,11 @@ def exchange_pairing(db: Session, device_code: str) -> dict:
     }
 
 
-def authenticate_device(db: Session, authorization: str) -> ReceiptDevice:
+def authenticate_device(db: Session, authorization: str, *, lock: bool = False) -> ReceiptDevice:
     if not re.fullmatch(r"Bearer [A-Za-z0-9_-]{43}", authorization):
         raise ApiError(401, "DEVICE_UNAUTHORIZED", "设备授权无效，请重新授权")
-    row = db.scalar(
-        select(ReceiptDevice).where(ReceiptDevice.token_hash == digest(authorization[7:]))
-    )
+    query = select(ReceiptDevice).where(ReceiptDevice.token_hash == digest(authorization[7:]))
+    row = db.scalar(query.with_for_update() if lock else query)
     user = db.get(User, row.user_id) if row else None
     if (
         row is None

@@ -15,8 +15,9 @@ from app.schemas.receipt_review import DraftRequest
 from app.services.receipt_review import validate_review
 
 
-def owned(db: Session, user_id: uuid.UUID, receipt_id: uuid.UUID) -> Receipt:
-    row = db.scalar(select(Receipt).where(Receipt.id == receipt_id, Receipt.user_id == user_id))
+def owned(db: Session, user_id: uuid.UUID, receipt_id: uuid.UUID, *, lock: bool = False) -> Receipt:
+    query = select(Receipt).where(Receipt.id == receipt_id, Receipt.user_id == user_id)
+    row = db.scalar(query.with_for_update() if lock else query)
     if row is None:
         raise ApiError(404, "RECEIPT_NOT_FOUND", "单据不存在")
     return row
@@ -33,7 +34,7 @@ def result(row: Receipt):
 
 
 def save(db: Session, user_id: uuid.UUID, payload: DraftRequest):
-    row = owned(db, user_id, payload.receipt_id)
+    row = owned(db, user_id, payload.receipt_id, lock=True)
     values = validate_review(db, user_id, payload.values).model_dump(by_alias=True)
     digest = hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
     key = str(payload.request_key)

@@ -80,3 +80,13 @@ class DraftRequest(BaseModel):
     request_key: uuid.UUID = Field(alias="requestKey")
     expected_revision: int = Field(alias="expectedRevision", ge=0, strict=True)
     values: ReviewFields
+
+
+class ConfirmationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    receipt_id: uuid.UUID = Field(alias="receiptId")
+    revision: int = Field(ge=1, strict=True)
+    request_key: uuid.UUID = Field(alias="requestKey")
+    confirmed: bool = Field(strict=True)
+    allow_duplicate: bool = Field(default=False, alias="allowDuplicate", strict=True)

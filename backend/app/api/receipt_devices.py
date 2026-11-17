@@ -19,9 +19,9 @@ from app.db.session import get_db
 from app.models.audit import AuditLog
 from app.models.receipt_device import ReceiptDevice
 from app.schemas.receipt import ReceiptCandidate
-from app.schemas.receipt_review import CorrectionRequest, DraftRequest
+from app.schemas.receipt_review import ConfirmationRequest, CorrectionRequest, DraftRequest
+from app.services import receipt_confirmation, receipt_draft, receipt_review
 from app.services import receipt_device as devices
-from app.services import receipt_draft, receipt_review
 
 Db = Annotated[Session, Depends(get_db)]
 
@@ -181,6 +181,7 @@ def list_devices(auth: CurrentAuthDependency, db: Db):
             "id": str(row.id),
             "deviceName": row.device_name,
             "scope": devices.SCOPE,
+            "canCreateExpenses": row.expense_write_enabled,
             "expiresAt": devices.as_utc(row.expires_at).isoformat() if row.expires_at else None,
         }
         for row in rows
@@ -208,6 +209,80 @@ def revoke(device_id: uuid.UUID, request: Request, auth: CurrentAuthDependency, 
             )
         )
         db.commit()
+
+
+@router.get("/capabilities")
+def device_capabilities(request: Request, db: Db):
+    grant = devices.authenticate_device(db, request.headers.get("authorization", ""))
+    return {
+        "deviceId": str(grant.id),
+        "canCreateExpenses": grant.expense_write_enabled,
+        "authorizationUri": devices.public_origin() + "/receipt-devices?device=" + str(grant.id),
+    }
+
+
+@router.post("/{device_id}/expense-permission")
+async def expense_permission(
+    device_id: uuid.UUID, request: Request, auth: CurrentAuthDependency, db: Db
+):
+    owner_intent(request)
+    body = await read_json(request, {"enabled"})
+    if type(body.get("enabled")) is not bool:
+        raise ApiError(422, "DEVICE_BODY_INVALID", "请明确选择是否允许确认入账")
+    row = db.scalar(
+        select(ReceiptDevice)
+        .where(
+            ReceiptDevice.id == device_id,
+            ReceiptDevice.user_id == auth.user.id,
+            ReceiptDevice.revoked_at.is_(None),
+            ReceiptDevice.password_fingerprint == devices.digest(auth.user.password_hash),
+            or_(ReceiptDevice.expires_at.is_(None), ReceiptDevice.expires_at > devices.now()),
+        )
+        .with_for_update()
+    )
+    if row is None:
+        raise ApiError(404, "DEVICE_NOT_FOUND", "设备不存在或授权已失效")
+    if row.expense_write_enabled != body["enabled"]:
+        row.expense_write_enabled = body["enabled"]
+        db.add(
+            AuditLog(
+                user_id=auth.user.id,
+                action="receipt_device.expense_permission",
+                entity_type="receipt_device",
+                entity_id=row.id,
+                after_data={"enabled": body["enabled"]},
+            )
+        )
+        db.commit()
+    return {"enabled": row.expense_write_enabled}
+
+
+@router.post("/receipt-confirmations")
+async def confirm_receipt(request: Request, response: Response, db: Db):
+    authorization = request.headers.get("authorization", "")
+    devices.authenticate_device(db, authorization)
+    body = await read_json(
+        request, {"receiptId", "revision", "requestKey", "confirmed", "allowDuplicate"}
+    )
+    try:
+        payload = ConfirmationRequest.model_validate(body)
+    except ValidationError:
+        raise ApiError(422, "REVIEW_FIELDS_INVALID", "确认字段无效") from None
+    db.expire_all()
+    grant = devices.authenticate_device(db, authorization, lock=True)
+    return receipt_confirmation.confirm(
+        db,
+        grant,
+        payload,
+        response,
+        lambda: devices.authenticate_device(db, authorization, lock=True),
+    )
+
+
+@router.get("/receipt-confirmations/{request_key}")
+def confirmation_outcome(request_key: uuid.UUID, receiptId: uuid.UUID, request: Request, db: Db):
+    grant = devices.authenticate_device(db, request.headers.get("authorization", ""))
+    return receipt_confirmation.outcome(db, grant.user_id, request_key, receiptId)
 
 
 @router.post("/receipt-recognition", response_model=ReceiptCandidate)

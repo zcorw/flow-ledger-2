@@ -1,6 +1,63 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+test('separate phone consent enables one idempotent receipt expense and can be revoked', async ({ page, playwright }) => {
+  const setup = await (await page.request.get('/api/v1/setup/status')).json();
+  if (setup.requires_setup) await page.request.post('/api/v1/setup/bootstrap', { data: {
+    bootstrapToken: 'e2e-bootstrap-token', displayName: 'Synthetic owner', email: 'e2e@example.com', password: 'e2e-password-456',
+  } });
+  await page.request.post('/api/v1/auth/login', { data: { email: 'e2e@example.com', password: 'e2e-password-456' } });
+  const device = await playwright.request.newContext({ baseURL: 'http://127.0.0.1:4186' });
+  const prefix = '/api/v1/receipt-devices';
+  try {
+    const pairing = await (await device.post(prefix + '/pairings', { data: { deviceName: 'E2E native confirmation' } })).json();
+    await page.request.post(prefix + '/pairings/approve', { headers: { 'X-Device-Approval': '1' }, data: { userCode: pairing.userCode } });
+    const grant = await (await device.post(prefix + '/pairings/token', { data: { deviceCode: pairing.deviceCode } })).json();
+    const headers = { Authorization: 'Bearer ' + grant.accessToken };
+    await page.goto('/receipt-devices?device=' + grant.deviceId);
+    await expect(page.getByText('E2E native confirmation', { exact: true })).toBeVisible();
+    const before = (await (await page.request.get('/api/v1/expenses')).json()).total;
+    const png = await page.evaluate(() => {
+      const canvas = document.createElement('canvas'); canvas.width = 40; canvas.height = 80;
+      const context = canvas.getContext('2d')!; context.fillStyle = '#fff'; context.fillRect(0, 0, 40, 80);
+      return canvas.toDataURL('image/png').split(',')[1];
+    });
+    // The isolated server has no provider key. Valid original persistence precedes
+    // this expected configuration error; no paid recognition is performed.
+    const uploaded = await device.post(prefix + '/receipt-recognition', { headers: { ...headers, 'Content-Type': 'image/png', 'X-Receipt-Upload': '1' }, data: Buffer.from(png, 'base64') });
+    expect(uploaded.status()).toBe(503);
+    const receiptId = (await uploaded.json()).error.details.find((item: { receiptId?: string }) => item.receiptId)?.receiptId;
+    expect(receiptId).toBeTruthy();
+    const account = await (await page.request.post('/api/v1/accounts', { data: { name: 'E2E confirmation wallet', accountType: 'cash_wallet' } })).json();
+    const draft = await device.post(prefix + '/receipt-drafts', { headers, data: {
+      receiptId, requestKey: crypto.randomUUID(), expectedRevision: 0,
+      values: { amount: '614', expenseDate: '2026-11-17', currencyCode: 'CNY', category: 'food', accountId: account.id, merchant: 'E2E confirmation merchant' },
+    } });
+    expect(draft.status()).toBe(200);
+    const confirmation = { receiptId, revision: 1, requestKey: crypto.randomUUID(), confirmed: true };
+    expect((await device.post(prefix + '/receipt-confirmations', { headers, data: confirmation })).status()).toBe(403);
+    expect((await (await page.request.get('/api/v1/expenses')).json()).total).toBe(before);
+    await page.getByRole('button', { name: '允许确认入账', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '允许设备确认入账' });
+    const approve = dialog.getByRole('button', { name: '确认授权入账' });
+    await expect(approve).toBeDisabled();
+    expect((await (await device.get(prefix + '/capabilities', { headers })).json()).canCreateExpenses).toBe(false);
+    await dialog.getByRole('checkbox').check(); await approve.click(); await expect(dialog).not.toBeVisible();
+    const created = await device.post(prefix + '/receipt-confirmations', { headers, data: confirmation });
+    expect(created.status()).toBe(201);
+    const record = (await created.json()).record;
+    const repeated = await device.post(prefix + '/receipt-confirmations', { headers, data: confirmation });
+    expect((await repeated.json()).record.id).toBe(record.id);
+    expect((await (await page.request.get('/api/v1/expenses')).json()).total).toBe(before + 1);
+    expect((await page.request.get('/api/v1/receipts/' + receiptId + '/image')).status()).toBe(200);
+    await page.getByRole('button', { name: '撤销入账权限' }).click();
+    await expect(page.getByRole('button', { name: '允许确认入账' })).toBeVisible();
+    expect((await (await device.get(prefix + '/capabilities', { headers })).json()).canCreateExpenses).toBe(false);
+    expect((await device.get(prefix + '/receipt-drafts/' + receiptId, { headers })).status()).toBe(200);
+    expect((await page.request.delete(prefix + '/' + grant.deviceId, { headers: { 'X-Device-Approval': '1' } })).status()).toBe(204);
+  } finally { await device.dispose(); }
+});
+
 test('phone login returns to device consent; matching code requires explicit approval and supports revocation', async ({ page, playwright }) => {
   test.setTimeout(90_000);
   const setup = await (await page.request.get('/api/v1/setup/status')).json();

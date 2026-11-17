@@ -277,20 +277,26 @@ def list_expenses(
 def create_expense(
     payload: ExpenseCreate, auth: CurrentAuthDependency, db: DbDependency, response: Response
 ):
+    return create_expense_for_user(payload, auth.user.id, db, response)
+
+
+def create_expense_for_user(
+    payload: ExpenseCreate, user_id: uuid.UUID, db: Session, response: Response
+):
     digest = _request_hash(payload)
     previous = db.scalar(
         select(Expense).where(
-            Expense.user_id == auth.user.id, Expense.request_key == payload.request_key
+            Expense.user_id == user_id, Expense.request_key == payload.request_key
         )
     )
     if previous:
         response.status_code = 200
         return _replay(previous, digest)
-    _validate_links(db, auth.user.id, payload)
+    _validate_links(db, user_id, payload)
     duplicate = db.scalar(
         select(Expense.id)
         .where(
-            Expense.user_id == auth.user.id,
+            Expense.user_id == user_id,
             Expense.deleted_at.is_(None),
             Expense.expense_date == payload.expense_date,
             Expense.amount == payload.amount,
@@ -304,7 +310,7 @@ def create_expense(
         # the duplicate query. Return its result rather than a false warning.
         winner = db.scalar(
             select(Expense).where(
-                Expense.user_id == auth.user.id, Expense.request_key == payload.request_key
+                Expense.user_id == user_id, Expense.request_key == payload.request_key
             )
         )
         if winner is not None:
@@ -315,7 +321,7 @@ def create_expense(
         )
     item = Expense(
         id=uuid.uuid4(),
-        user_id=auth.user.id,
+        user_id=user_id,
         request_hash=digest,
         **payload.model_dump(exclude={"allow_duplicate"}),
     )
@@ -324,7 +330,7 @@ def create_expense(
         db.flush()
         db.add(
             AuditLog(
-                user_id=auth.user.id,
+                user_id=user_id,
                 action="expense.create",
                 entity_type="expense",
                 entity_id=item.id,
@@ -337,7 +343,7 @@ def create_expense(
         db.rollback()
         winner = db.scalar(
             select(Expense).where(
-                Expense.user_id == auth.user.id, Expense.request_key == payload.request_key
+                Expense.user_id == user_id, Expense.request_key == payload.request_key
             )
         )
         if winner is None:

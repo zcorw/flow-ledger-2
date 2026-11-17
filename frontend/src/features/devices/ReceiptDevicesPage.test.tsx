@@ -3,8 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReceiptDevicesPage } from './ReceiptDevicesPage';
-import { decidePairing, getPairing, listReceiptDevices, revokeReceiptDevice } from './api';
-vi.mock('./api', () => ({ decidePairing: vi.fn(), getPairing: vi.fn(), listReceiptDevices: vi.fn(), revokeReceiptDevice: vi.fn() }));
+import { decidePairing, getPairing, listReceiptDevices, revokeReceiptDevice, setExpensePermission } from './api';
+vi.mock('./api', () => ({ decidePairing: vi.fn(), getPairing: vi.fn(), listReceiptDevices: vi.fn(), revokeReceiptDevice: vi.fn(), setExpensePermission: vi.fn() }));
 const clients: QueryClient[] = [];
 function show(path = '/receipt-devices') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); clients.push(client);
@@ -17,6 +17,16 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); clients.splice(0).forEach(client => client.clear()); vi.resetAllMocks(); });
 describe('phone device consent', () => {
+  it('does not enable accounting from a link and requires a separate explicit acknowledgement', async () => {
+    vi.mocked(listReceiptDevices).mockResolvedValue([{ id: 'device-one', deviceName: 'Rokid', scope: 'receipt:recognize', expiresAt: null }]);
+    vi.mocked(setExpensePermission).mockResolvedValue({ enabled: true });
+    show('/receipt-devices?device=device-one');
+    fireEvent.click(await screen.findByRole('button', { name: '允许确认入账' }));
+    const approve = await screen.findByRole('button', { name: '确认授权入账' });
+    expect(approve).toBeDisabled(); expect(setExpensePermission).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('我已核对此设备，并允许逐笔确认入账')); fireEvent.click(approve);
+    await waitFor(() => expect(setExpensePermission).toHaveBeenCalledWith('device-one', true));
+  });
   it('never authorizes from a prefilled code and requires lookup plus explicit acknowledgement', async () => {
     show('/receipt-devices?code=ABCD-EFGH');
     expect(decidePairing).not.toHaveBeenCalled(); expect(getPairing).not.toHaveBeenCalled();
