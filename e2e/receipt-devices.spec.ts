@@ -24,6 +24,12 @@ test('phone login returns to device consent; matching code requires explicit app
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/receipt-devices?code=' + pairing.userCode);
     await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveTitle('知产');
+    await expect(page.getByRole('heading', { name: '登录知产' })).toBeVisible();
+    const brand = page.locator('img[src="/brand/zhichan.svg"]').first();
+    await expect(brand).toBeVisible();
+    await expect.poll(() => brand.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+    await page.screenshot({ path: test.info().outputPath('zhichan-login-mobile.png'), fullPage: true });
     await page.getByLabel('邮箱地址').fill('e2e@example.com');
     await page.getByLabel('密码', { exact: true }).fill('e2e-password-456');
     await page.getByRole('button', { name: '登录', exact: true }).click();
@@ -67,6 +73,7 @@ test('phone login returns to device consent; matching code requires explicit app
         await expect(navigation.getByRole('button', { name: '设备授权', exact: true })).toHaveCount(0);
         await expect(navigation.getByRole('button', { name: '设置', exact: true })).toHaveAttribute('aria-current', 'page');
       }
+      await page.screenshot({ path: test.info().outputPath(`devices-${viewport.width}.png`), fullPage: true });
     }
   } finally { await device.dispose(); }
 });

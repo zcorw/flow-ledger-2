@@ -36,7 +36,7 @@ export function LoginPage() {
   return (
     <AuthLayout>
       <Typography variant="overline" sx={{ color: 'primary.main', fontWeight: 700 }}>欢迎回来</Typography>
-      <Typography component="h1" variant="h4" sx={{ mt: 1, fontSize: 30 }}>登录 Flow Ledger</Typography>
+      <Typography component="h1" variant="h4" sx={{ mt: 1, fontSize: 30 }}>登录知产</Typography>
       <Typography sx={{ mt: 1, color: 'text.secondary', fontSize: 14 }}>继续查看和维护你的资产快照。</Typography>
       <Box component="form" onSubmit={form.handleSubmit((values) => mutation.mutate(values))} sx={{ mt: 4 }} noValidate>
         <Stack spacing={2}>

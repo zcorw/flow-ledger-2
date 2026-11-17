@@ -2,7 +2,7 @@
 
 **English** | [简体中文](receipt-devices.zh-CN.md)
 
-Rokid uses a separate persistent, revocable bearer grant. The signed-in owner explicitly approves the matching code at `/receipt-devices`. This permits receipt recognition only; it cannot create expenses or modify assets. Recognition produces a candidate for review, not a saved expense.
+Rokid uses a separate persistent, revocable bearer grant. The signed-in owner opens **Settings → Device authorization** and explicitly approves the matching code. Direct `/receipt-devices` pairing links remain supported. This permits receipt recognition only; it cannot create expenses or modify assets. Recognition produces a candidate for review, not a saved expense.
 
 ## Deployment
 
@@ -10,7 +10,7 @@ Deploy backend and frontend from the same revision, following the backup/release
 
 Set backend `APP_BASE_URL=https://ledger.zcorw.xyz`. Configure the provider only on the server; see [receipt configuration](10-openai-receipts.md). HTTPS API requests must reach this origin without redirects. No CORS changes are needed for native fetch or the same-origin phone page. Do not log authorization headers, user/device codes, image bodies or provider keys.
 
-After deployment, signed-out access to `/receipt-devices` should lead to login and return to this page. On the current glasses package, capture a receipt, enter the matching code on the phone, acknowledge and approve it. Recognition continues automatically. Check the returned amount, currency, date and merchant against the receipt. Test denial, expiry, revocation, retry and exit on hardware. Automated tests use fake OCR rather than production provider calls.
+After deployment, signed-out access to `/receipt-devices` should lead to login and return to this page. On the current glasses package, an unbound device shows the matching code at entry before camera access. Enter it on the phone, acknowledge and approve it; preview then opens automatically. Capture a receipt to start recognition. Check the returned amount, currency, date and merchant against the receipt. Test denial, expiry, revocation, retry and exit on hardware. Automated tests use fake OCR rather than production provider calls.
 
 ## Protocol
 

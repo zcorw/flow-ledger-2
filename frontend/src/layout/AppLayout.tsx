@@ -5,7 +5,6 @@ import LogoutOutlined from '@mui/icons-material/LogoutOutlined';
 import MenuOutlined from '@mui/icons-material/MenuOutlined';
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined';
 import SwapHorizOutlined from '@mui/icons-material/SwapHorizOutlined';
-import WalletOutlined from '@mui/icons-material/WalletOutlined';
 import ReceiptLongOutlined from '@mui/icons-material/ReceiptLongOutlined';
 import {
   AppBar,
@@ -28,6 +27,7 @@ import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { getMe, logout } from '../features/auth/api';
 import { useCompactPageTitle } from './useCompactPageTitle';
+import { BrandMark } from '../components/BrandMark';
 
 const drawerWidth = 252;
 const navItems = [
@@ -89,11 +89,9 @@ export function AppLayout() {
   const drawerContent = (
     <>
       <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', px: 1, py: 1.5 }}>
-        <Box sx={{ width: 34, height: 34, display: 'grid', placeItems: 'center', borderRadius: 1.5, bgcolor: 'primary.main' }}>
-          <WalletOutlined fontSize="small" />
-        </Box>
+        <BrandMark />
         <Box>
-          <Typography sx={{ color: 'white', fontWeight: 700, fontSize: 15 }}>Flow Ledger</Typography>
+          <Typography sx={{ color: 'white', fontWeight: 700, fontSize: 15 }}>知产</Typography>
           <Typography sx={{ color: '#a7b2af', fontSize: 11 }}>个人资产台账</Typography>
         </Box>
       </Stack>

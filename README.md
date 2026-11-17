@@ -1,8 +1,8 @@
-# Flow Ledger
+# 知产 (Zhichan)
 
 **English** | [简体中文](README.zh-CN.md)
 
-Flow Ledger is a private, personal asset-management web application. Built around monthly snapshots, it brings institutions, accounts, asset items, historical exchange rates, receivables, and liabilities into one place. Balances in different currencies are converted to CNY, making it easy to track total assets, total liabilities, net worth, and month-over-month changes.
+Zhichan (知产, formerly Flow Ledger) is a private, personal asset-management web application. Built around monthly snapshots, it brings institutions, accounts, asset items, historical exchange rates, receivables, and liabilities into one place. Balances in different currencies are converted to CNY, making it easy to track total assets, total liabilities, net worth, and month-over-month changes.
 
 The project centers on monthly asset snapshots and also supports independent daily expense records. It does not connect to banking or brokerage APIs, nor does it calculate actual investment returns.
 

@@ -63,6 +63,11 @@ Flow Ledger 是一个面向个人私有使用的资金资产管理 Web 应用。
 
 ## Development TodoList
 
+- [x] T014 [P2] 统一知产网站名称和 Logo
+  Goal: 登录、初始化、应用导航与浏览器标题使用知产名称；提供可缩放的站点 Logo 和 favicon。
+  Result: 使用现有绿色主题设计账页与资产条形图标，复用同一 SVG；技术仓库、API 与数据库名称不变。
+  Verify: 前端 lint/typecheck/test/build、浏览器品牌及图标加载检查；Logo 视觉确认和生产部署另行验收。
+
 - [x] T013 [P2] 将设备授权入口归入设置
   Goal: 桌面和移动端均可从设置进入设备授权，并可返回设置；设备页归属设置导航。
   Result: 主导航移除设备授权独立项；设置增加管理入口，保留 /receipt-devices 直达和登录返回语义，不改变授权权限。
