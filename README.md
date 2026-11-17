@@ -46,6 +46,8 @@ For an existing local Docker deployment, run `docker compose up -d --build --no-
 
 ## Original receipts
 
+The development branch adds versioned receipt drafts (migration `0014_receipt_drafts`). Glasses **Draft** saves the current reviewed fields against the original receipt without creating an expense. On **Recognized receipts**, filter unposted drafts or search merchants, continue editing, then explicitly record an expense. Optimistic revisions reject stale edits; stable request IDs make retries idempotent. JSON backups with drafts use version 4 and older versions remain restorable.
+
 Open **Daily Expenses → Recognized receipts** to review uploaded originals and their results, including incomplete or failed recognition. A saved expense can reference its receipt and open the same original. Uploaded bytes are stored in the VPS PostgreSQL persistent volume, included in full backups, and available only to the signed-in owner. No expense is created automatically. Web JSON backups include images (64 MiB limit); larger archives use server full backups. New deployment requires migration `0013_receipt_originals`. Older photos that were never saved cannot be recovered. See [original receipt storage](docs/receipt-originals.md).
 
 ## Rokid Device Authorization

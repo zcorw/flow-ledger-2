@@ -1,4 +1,5 @@
 import re
+import uuid
 from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -70,3 +71,12 @@ class VoicePatch(BaseModel):
     accountName: str | None = Field(max_length=150)
     note: str | None = Field(max_length=2000)
     warnings: list[str] = Field(max_length=6)
+
+
+class DraftRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    receipt_id: uuid.UUID = Field(alias="receiptId")
+    request_key: uuid.UUID = Field(alias="requestKey")
+    expected_revision: int = Field(alias="expectedRevision", ge=0, strict=True)
+    values: ReviewFields

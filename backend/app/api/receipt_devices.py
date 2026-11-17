@@ -19,9 +19,9 @@ from app.db.session import get_db
 from app.models.audit import AuditLog
 from app.models.receipt_device import ReceiptDevice
 from app.schemas.receipt import ReceiptCandidate
-from app.schemas.receipt_review import CorrectionRequest
+from app.schemas.receipt_review import CorrectionRequest, DraftRequest
 from app.services import receipt_device as devices
-from app.services import receipt_review
+from app.services import receipt_draft, receipt_review
 
 Db = Annotated[Session, Depends(get_db)]
 
@@ -107,6 +107,27 @@ async def review_correction(request: Request, db: Db):
     db.expire_all()
     devices.authenticate_device(db, authorization)
     return result
+
+
+@router.post("/receipt-drafts")
+async def save_receipt_draft(request: Request, db: Db):
+    grant = devices.authenticate_device(db, request.headers.get("authorization", ""))
+    body = await read_json(
+        request, {"receiptId", "requestKey", "expectedRevision", "values"}, 16384
+    )
+    try:
+        payload = DraftRequest.model_validate(body)
+    except ValidationError:
+        raise ApiError(422, "REVIEW_FIELDS_INVALID", "草稿字段无效") from None
+    db.expire_all()
+    grant = devices.authenticate_device(db, request.headers.get("authorization", ""))
+    return receipt_draft.save(db, grant.user_id, payload)
+
+
+@router.get("/receipt-drafts/{receipt_id}")
+def get_receipt_draft(receipt_id: uuid.UUID, request: Request, db: Db):
+    grant = devices.authenticate_device(db, request.headers.get("authorization", ""))
+    return receipt_draft.result(receipt_draft.owned(db, grant.user_id, receipt_id))
 
 
 async def read_user_code(request: Request) -> str:

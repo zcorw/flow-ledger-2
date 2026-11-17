@@ -148,6 +148,7 @@ export function ExpensePage() {
       setFormError('请填写有效日期、币种和正数金额（最多 14 位整数、6 位小数）。'); return;
     }
     if (source === 'receipt_ocr' && !reviewed) { setFormError('请核对并勾选确认识别字段。'); return; }
+    if (!draft.category || !Object.hasOwn(categories, draft.category)) { setFormError('请选择消费分类。'); return; }
     saveLock.current = true; setFormError(''); save.mutate(allowDuplicate);
   };
   const setFilter = (patch: Partial<Filters>) => { setFilters((value) => ({ ...value, ...patch })); setPage(0); };
@@ -247,6 +248,7 @@ export function ExpensePage() {
               <MenuItem value="">请选择币种</MenuItem>{availableCurrencies.map((item) => <MenuItem value={item.code} key={item.code}>{item.code} · {item.name}</MenuItem>)}
             </TextField>
             <TextField select label="消费分类" required value={draft.category} onChange={(e) => changeDraft({ category: e.target.value as Category })}>
+              <MenuItem value="">请选择分类</MenuItem>
               {Object.entries(categories).map(([key, value]) => <MenuItem value={key} key={key}>{value}</MenuItem>)}
             </TextField>
             <TextField label="商户（可选）" value={draft.merchant ?? ''} onChange={(e) => changeDraft({ merchant: e.target.value })} slotProps={{ htmlInput: { maxLength: 150 } }} />

@@ -8,7 +8,7 @@ export const categories = {
 } as const;
 export type Category = keyof typeof categories;
 export type ExpenseFields = {
-  expenseDate: string; amount: string; currencyCode: string; category: Category;
+  expenseDate: string; amount: string; currencyCode: string; category: Category | '';
   merchant: string | null; accountId: string | null; note: string | null;
   receiptId?: string | null;
 };

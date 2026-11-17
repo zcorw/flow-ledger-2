@@ -2,7 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import CurrentAuthDependency
@@ -10,6 +10,8 @@ from app.core.errors import ApiError
 from app.db.session import get_db
 from app.models.expense import Expense
 from app.models.receipt import Receipt
+from app.schemas.receipt_review import DraftRequest
+from app.services import receipt_draft
 
 router = APIRouter()
 Db = Annotated[Session, Depends(get_db)]
@@ -37,6 +39,8 @@ def metadata(item: Receipt, expense_id: uuid.UUID | None = None):
         "merchant": item.merchant,
         "warnings": item.warnings,
         "failureCode": item.failure_code,
+        "draftValues": item.draft_values,
+        "draftRevision": item.draft_revision,
     }
 
 
@@ -47,14 +51,25 @@ def list_receipts(
     response: Response,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=50)] = 25,
+    drafts: bool = False,
+    q: Annotated[str, Query(max_length=150)] = "",
 ):
     response.headers["Cache-Control"] = "no-store"
+    query = select(Receipt).where(Receipt.user_id == auth.user.id)
+    if drafts:
+        query = query.where(
+            Receipt.draft_revision > 0,
+            ~select(Expense.id).where(Expense.receipt_id == Receipt.id).exists(),
+        )
+    if q:
+        query = query.where(
+            or_(
+                Receipt.merchant.icontains(q, autoescape=True),
+                Receipt.draft_values["merchant"].as_string().icontains(q, autoescape=True),
+            )
+        )
     rows = db.scalars(
-        select(Receipt)
-        .where(Receipt.user_id == auth.user.id)
-        .order_by(Receipt.created_at.desc(), Receipt.id.desc())
-        .offset(offset)
-        .limit(limit)
+        query.order_by(Receipt.created_at.desc(), Receipt.id.desc()).offset(offset).limit(limit)
     ).all()
     links = dict(
         db.execute(
@@ -66,9 +81,7 @@ def list_receipts(
     )
     return {
         "items": [metadata(row, links.get(row.id)) for row in rows],
-        "total": db.scalar(
-            select(func.count()).select_from(Receipt).where(Receipt.user_id == auth.user.id)
-        ),
+        "total": db.scalar(select(func.count()).select_from(query.subquery())),
     }
 
 
@@ -99,3 +112,9 @@ def original_image(receipt_id: uuid.UUID, auth: CurrentAuthDependency, db: Db):
             "Content-Security-Policy": "default-src 'none'; sandbox",
         },
     )
+
+
+@router.post("/drafts")
+def save_draft(payload: DraftRequest, auth: CurrentAuthDependency, db: Db, response: Response):
+    response.headers["Cache-Control"] = "no-store"
+    return receipt_draft.save(db, auth.user.id, payload)

@@ -79,7 +79,13 @@ def build_backup_payload(db: Session, user_id: uuid.UUID) -> dict[str, Any]:
             list(db.scalars(select(model).where(model.user_id == user_id)))  # type: ignore[attr-defined]
         )
     return {
-        "version": 3 if tables["receipts"] else 2,
+        "version": (
+            4
+            if any(row.get("draft_revision", 0) for row in tables["receipts"])
+            else 3
+            if tables["receipts"]
+            else 2
+        ),
         "exported_at": utc_now().isoformat(),
         "tables": tables,
     }
@@ -91,7 +97,7 @@ def backup_checksum(payload: dict[str, Any]) -> str:
 
 
 def validate_backup_payload(payload: dict[str, Any]) -> None:
-    if payload.get("version") not in (1, 2, 3) or not isinstance(payload.get("tables"), dict):
+    if payload.get("version") not in (1, 2, 3, 4) or not isinstance(payload.get("tables"), dict):
         raise ValueError("不支持的备份格式")
     tables = payload["tables"]
     for table_name in RESTORE_ORDER:
@@ -137,6 +143,28 @@ def validate_backup_payload(payload: dict[str, Any]) -> None:
                 "warnings": row.get("warnings"),
             }
         )
+        revision = row.get("draft_revision", 0)
+        if type(revision) is not int or revision < 0:
+            raise ValueError("草稿版本无效")
+        if revision:
+            from typing import get_args
+
+            from app.schemas.expense import ExpenseCategory
+            from app.schemas.receipt_review import ReviewFields
+
+            draft = ReviewFields.model_validate(row.get("draft_values"))
+            if draft.account_id and draft.account_id not in account_ids:
+                raise ValueError("草稿账户不属于该备份")
+            if draft.category and draft.category not in get_args(ExpenseCategory):
+                raise ValueError("草稿分类无效")
+            uuid.UUID(str(row.get("draft_request_key")))
+            digest = row.get("draft_request_hash", "")
+            if (
+                not isinstance(digest, str)
+                or len(digest) != 64
+                or any(char not in "0123456789abcdef" for char in digest)
+            ):
+                raise ValueError("草稿请求摘要无效")
     seen_keys = set()
     linked_receipts = set()
     for row in tables.get("expenses", []):
@@ -202,7 +230,9 @@ def create_backup(db: Session, user_id: uuid.UUID, purpose: str = "manual") -> B
 def _decoded_row(model: type[Any], raw: dict[str, Any]) -> dict[str, Any]:
     values: dict[str, Any] = {}
     for column in model.__table__.columns:
-        value = raw.get(column.name)
+        value = raw.get(
+            column.name, 0 if model is Receipt and column.name == "draft_revision" else None
+        )
         if value is None:
             values[column.name] = None
         elif isinstance(column.type, Uuid):
