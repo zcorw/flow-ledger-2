@@ -10,10 +10,12 @@ export type Category = keyof typeof categories;
 export type ExpenseFields = {
   expenseDate: string; amount: string; currencyCode: string; category: Category;
   merchant: string | null; accountId: string | null; note: string | null;
+  receiptId?: string | null;
 };
 export type Expense = {
   id: string; expense_date: string; amount: string; currency_code: string; category: Category;
   merchant: string | null; account_id: string | null; note: string | null;
+  receipt_id?: string | null;
   source: 'manual' | 'receipt_ocr'; created_at: string; updated_at: string;
 };
 export type ExpenseInput = ExpenseFields & {

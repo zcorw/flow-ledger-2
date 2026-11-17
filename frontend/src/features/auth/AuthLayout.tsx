@@ -1,6 +1,6 @@
-import AccountBalanceWalletOutlined from '@mui/icons-material/AccountBalanceWalletOutlined';
 import { Box, Paper, Stack, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
+import { BrandMark } from '../../components/BrandMark';
 
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
@@ -30,10 +30,8 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         }}
       >
         <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', position: 'relative', zIndex: 1 }}>
-          <Box sx={{ width: 34, height: 34, display: 'grid', placeItems: 'center', borderRadius: 1.5, bgcolor: 'primary.main' }}>
-            <AccountBalanceWalletOutlined fontSize="small" />
-          </Box>
-          <Typography sx={{ fontWeight: 700 }}>Flow Ledger</Typography>
+          <BrandMark />
+          <Typography sx={{ fontWeight: 700 }}>知产</Typography>
         </Stack>
         <Box sx={{ position: 'relative', zIndex: 1, my: 'auto', maxWidth: 560, py: { xs: 4, md: 8 } }}>
           <Typography variant="overline" sx={{ color: '#67c4ad', fontWeight: 700, letterSpacing: '.16em' }}>

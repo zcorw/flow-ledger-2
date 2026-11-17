@@ -1,7 +1,7 @@
 import { Alert, Box, Button, Checkbox, FormControlLabel, Paper, Stack, TextField, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../../api/client';
 import { decidePairing, getPairing, listReceiptDevices, revokeReceiptDevice } from './api';
 
@@ -27,6 +27,7 @@ export function ReceiptDevicesPage() {
   const codeValid = /^[A-HJ-NP-Z2-9]{8}$/.test(normalized(code));
   return (
     <Stack spacing={3} sx={{ maxWidth: 720 }}>
+      <Button component={RouterLink} to="/settings" sx={{ alignSelf: 'flex-start' }}>返回设置</Button>
       <Box>
         <Typography component="h1" variant="h4" data-page-title>设备授权</Typography>
         <Typography color="text.secondary" sx={{ mt: 1 }}>输入眼镜上显示的授权码，核对后允许它识别收据。</Typography>
@@ -47,7 +48,7 @@ export function ReceiptDevicesPage() {
               <Typography sx={{ fontFamily: 'monospace', fontSize: 28 }}>{selectedCode.slice(0, 4)}-{selectedCode.slice(4)}</Typography>
               <Typography color="text.secondary">授权码有效至 {new Date(pairing.data.expiresAt).toLocaleString()}</Typography>
               {pairing.data.status === 'pending' ? <>
-                <Alert severity="info">仅允许识别收据，长期有效，可随时撤销。照片将发送给知产后端及其配置的识别服务。此授权不会创建开销或修改资产。</Alert>
+                <Alert severity="info">仅允许识别收据，长期有效，可随时撤销。原图与识别结果将保存在知产，方便以后查看；图片也会发送给配置的识别服务。此授权不会创建开销或修改资产。</Alert>
                 <FormControlLabel control={<Checkbox checked={acknowledged} disabled={decision.isPending} onChange={(event) => setAcknowledged(event.target.checked)} />} label="我已核对，授权码与眼镜显示一致" />
                 <Stack direction="row" spacing={1}>
                   <Button variant="contained" disabled={!acknowledged || decision.isPending} onClick={() => decision.mutate('approve')}>授权识别收据</Button>

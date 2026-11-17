@@ -38,6 +38,7 @@ class ExpenseFields(BaseModel):
     merchant: str | None = Field(default=None, max_length=150)
     account_id: uuid.UUID | None = Field(default=None, alias="accountId")
     note: str | None = Field(default=None, max_length=2000)
+    receipt_id: uuid.UUID | None = Field(default=None, alias="receiptId")
 
     @field_validator("expense_date", mode="before")
     @classmethod

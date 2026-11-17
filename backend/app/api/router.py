@@ -9,6 +9,7 @@ from app.api.expenses import router as expenses_router
 from app.api.fx import router as fx_router
 from app.api.operations import router as operations_router
 from app.api.receipt_devices import router as receipt_devices_router
+from app.api.receipts import router as receipts_router
 from app.api.setup import router as setup_router
 from app.api.snapshots import router as snapshots_router
 from app.api.system import router as system_router
@@ -20,6 +21,7 @@ api_router.include_router(assets_router, tags=["asset-hierarchy"])
 api_router.include_router(currencies_router, prefix="/currencies", tags=["currencies"])
 api_router.include_router(debts_router, prefix="/debts", tags=["debts"])
 api_router.include_router(expenses_router, prefix="/expenses", tags=["expenses"])
+api_router.include_router(receipts_router, prefix="/receipts", tags=["receipts"])
 api_router.include_router(
     receipt_devices_router, prefix="/receipt-devices", tags=["receipt-devices"]
 )

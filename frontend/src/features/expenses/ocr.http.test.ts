@@ -25,7 +25,7 @@ describe('receipt admission', () => {
 describe('receipt recognition with simulated HTTP', () => {
   const candidate = { amount: '1234', expenseDate: '2026-11-01', currencyCode: 'JPY', merchant: '合成商店', warnings: [] };
   it('sends one authenticated image request and preserves decimal text', async () => {
-    const fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => candidate });
+    const fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, headers: new Headers(), json: async () => candidate });
     vi.stubGlobal('fetch', fetch);
     const image = new File(['synthetic'], 'private-filename.png', { type: 'image/png' });
     await expect(recognizeReceipt(image, vi.fn()).result).resolves.toEqual(candidate);
@@ -43,7 +43,7 @@ describe('receipt recognition with simulated HTTP', () => {
     const rejected = expect(task.result).rejects.toThrow('已取消');
     task.cancel(); await rejected;
     expect(fetch.mock.calls[0][1].signal.aborted).toBe(true);
-    respond({ ok: true, status: 200, json: async () => candidate });
+    respond({ ok: true, status: 200, headers: new Headers(), json: async () => candidate });
     await Promise.resolve(); expect(fetch).toHaveBeenCalledOnce();
   });
   it('aborts timeouts and states sent work can still be billed', async () => {

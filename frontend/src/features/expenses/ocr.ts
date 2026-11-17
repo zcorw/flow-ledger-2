@@ -37,6 +37,7 @@ export async function validateReceiptImage(file: File): Promise<void> {
 
 export type ReceiptCandidate = {
   amount: string; expenseDate: string; currencyCode: string; merchant: string; warnings: string[];
+  receiptId?: string;
 };
 export const getReceiptStatus = () => apiRequest<{ configured: boolean; model: string }>('/expenses/receipt-recognition');
 
@@ -46,6 +47,7 @@ export function recognizeReceipt(file: File, onProgress: (progress: number, stat
   let rejectResult: (error: Error) => void;
   let settled = false;
   let timer: ReturnType<typeof setTimeout>;
+  let receiptId: string | undefined;
   const finish = () => { settled = true; clearTimeout(timer); };
   const result = new Promise<ReceiptCandidate>((resolve, reject) => {
     rejectResult = reject;
@@ -57,8 +59,12 @@ export function recognizeReceipt(file: File, onProgress: (progress: number, stat
     void apiRequest<ReceiptCandidate>('/expenses/receipt-recognition', {
       method: 'POST', body: file, signal: controller.signal,
       headers: { 'Content-Type': file.type, 'X-Receipt-Upload': '1' },
+      onResponse: response => {
+        const value = response.headers.get('X-Receipt-Id');
+        if (/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value ?? '')) receiptId = value!;
+      },
     }).then((candidate) => {
-      if (!settled) { finish(); resolve(candidate); }
+      if (!settled) { finish(); resolve({ ...candidate, ...(receiptId ? { receiptId } : {}) }); }
     }, (error: unknown) => {
       if (!settled) { finish(); reject(error); }
     });

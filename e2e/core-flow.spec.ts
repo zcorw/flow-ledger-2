@@ -369,14 +369,14 @@ test('initializes, records an asset snapshot, verifies the dashboard, and logs o
   await expectNoSeriousAccessibilityIssues(page, 'account-settings');
 
   await page.getByRole('button', { name: '退出登录' }).click();
-  await expect(page.getByRole('heading', { name: '登录 Flow Ledger' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '登录知产' })).toBeVisible();
   await page.getByLabel('邮箱地址').fill('e2e@example.com');
   await page.getByLabel('密码').fill('e2e-password-456');
   await page.getByRole('button', { name: '登录' }).click();
   await expect(page.getByRole('heading', { level: 1, name: '首页看板' })).toBeVisible();
   await expect(page.getByText('E2E 管理员', { exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: '退出登录' }).click();
-  await expect(page.getByRole('heading', { name: '登录 Flow Ledger' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '登录知产' })).toBeVisible();
   await page.goto('/institutions');
   await expect(page).toHaveURL(/\/login$/);
   await page.goto('/setup');

@@ -1,4 +1,4 @@
-"""One image -> one editable candidate. No images, prompts or provider bodies are logged."""
+"""Normalize a separate OCR copy; originals are privately archived by the route."""
 
 import asyncio
 import base64
@@ -46,9 +46,9 @@ Warnings: at most 6 short Chinese sentences, 200 characters each. No confidence 
 
 def normalize_image(raw: bytes, content_type: str) -> bytes:
     """Decode before calling the paid API, orient, bound dimensions and remove metadata."""
-    expected = {"image/png": "PNG", "image/jpeg": "JPEG"}
+    expected = {"image/png": "PNG", "image/jpeg": "JPEG", "image/webp": "WEBP"}
     if content_type not in expected:
-        raise ApiError(415, "RECEIPT_IMAGE_TYPE", "仅支持 PNG、JPEG 图片")
+        raise ApiError(415, "RECEIPT_IMAGE_TYPE", "仅支持 PNG、JPEG、WebP 图片")
     if not raw or len(raw) > MAX_IMAGE_BYTES:
         raise ApiError(413, "RECEIPT_IMAGE_SIZE", "图片须为 1 字节至 8 MB")
     try:
@@ -58,6 +58,7 @@ def normalize_image(raw: bytes, content_type: str) -> bytes:
                 width, height = image.size
                 if (
                     image.format != expected[content_type]
+                    or getattr(image, "n_frames", 1) != 1
                     or width < 1
                     or height < 1
                     or max(width, height) > 10000
@@ -95,6 +96,11 @@ def _reserve(user_id: str, limit: int) -> None:
         if len(_requests[user_id]) >= limit:
             raise ApiError(429, "RECEIPT_RATE_LIMIT", "识别次数过多，请稍后再试或手工录入")
         _requests[user_id].append(now)
+
+
+def reserve_archive(user_id: str, limit: int) -> None:
+    """Bound durable uploads separately, before writing the original to the DB."""
+    _reserve("archive:" + user_id, limit)
 
 
 def _candidate(extraction: ReceiptExtraction) -> ReceiptCandidate:

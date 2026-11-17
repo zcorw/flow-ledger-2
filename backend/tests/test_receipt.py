@@ -251,6 +251,8 @@ def test_rate_and_concurrency_limits_prevent_paid_requests(client, provider, mon
     assert client.post(URL, headers=HEADERS, content=synthetic_image()).status_code == 429
     assert len(provider["calls"]) == 1
     receipt._slots.acquire()
+    # Exercise concurrency independently of the new pre-storage rate guard.
+    receipt._requests.clear()
     receipt._slots.acquire()
     try:
         result = client.post(URL, headers=HEADERS, content=synthetic_image())
