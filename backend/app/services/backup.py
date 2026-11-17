@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import json
 import uuid
@@ -5,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Date, DateTime, Numeric, Uuid, delete, select
+from sqlalchemy import Date, DateTime, LargeBinary, Numeric, Uuid, delete, select
 from sqlalchemy.orm import Session
 
 from app.models.asset import Account, MonthlySnapshot, Project
@@ -17,6 +18,7 @@ from app.models.expense import Expense, ExpenseAmount
 from app.models.fx import FxRate, FxSyncRun
 from app.models.institution import Institution
 from app.models.operations import BackupExport
+from app.models.receipt import Receipt
 from app.schemas.expense import ExpenseFields
 
 USER_TABLES = {
@@ -28,6 +30,7 @@ USER_TABLES = {
     "debt_items": DebtItem,
     "debt_events": DebtEvent,
     "expenses": Expense,
+    "receipts": Receipt,
     "audit_logs": AuditLog,
 }
 GLOBAL_TABLES = {
@@ -46,12 +49,15 @@ RESTORE_ORDER = [
     "monthly_snapshots",
     "debt_items",
     "debt_events",
+    "receipts",
     "expenses",
     "audit_logs",
 ]
 
 
 def _json_value(value: Any) -> Any:
+    if isinstance(value, bytes):
+        return base64.b64encode(value).decode("ascii")
     if isinstance(value, (uuid.UUID, Decimal, date, datetime)):
         return str(value)
     return value
@@ -72,7 +78,11 @@ def build_backup_payload(db: Session, user_id: uuid.UUID) -> dict[str, Any]:
         tables[name] = _rows(
             list(db.scalars(select(model).where(model.user_id == user_id)))  # type: ignore[attr-defined]
         )
-    return {"version": 2, "exported_at": utc_now().isoformat(), "tables": tables}
+    return {
+        "version": 3 if tables["receipts"] else 2,
+        "exported_at": utc_now().isoformat(),
+        "tables": tables,
+    }
 
 
 def backup_checksum(payload: dict[str, Any]) -> str:
@@ -81,10 +91,12 @@ def backup_checksum(payload: dict[str, Any]) -> str:
 
 
 def validate_backup_payload(payload: dict[str, Any]) -> None:
-    if payload.get("version") not in (1, 2) or not isinstance(payload.get("tables"), dict):
+    if payload.get("version") not in (1, 2, 3) or not isinstance(payload.get("tables"), dict):
         raise ValueError("不支持的备份格式")
     tables = payload["tables"]
     for table_name in RESTORE_ORDER:
+        if table_name == "receipts" and payload["version"] in (1, 2) and table_name not in tables:
+            continue
         if table_name == "expenses" and payload["version"] == 1 and table_name not in tables:
             continue
         rows = tables.get(table_name)
@@ -93,7 +105,40 @@ def validate_backup_payload(payload: dict[str, Any]) -> None:
         if any(not isinstance(row, dict) for row in rows):
             raise ValueError(f"备份数据表格式无效：{table_name}")
     account_ids = {str(row.get("id")) for row in tables["accounts"]}
+    receipt_ids = set()
+    for row in tables.get("receipts", []):
+        from app.services.receipt import MAX_IMAGE_BYTES, normalize_image
+
+        receipt_id = str(uuid.UUID(str(row.get("id"))))
+        if receipt_id in receipt_ids:
+            raise ValueError("单据标识重复")
+        receipt_ids.add(receipt_id)
+        try:
+            original = base64.b64decode(row.get("original_image", ""), validate=True)
+            if not 0 < len(original) <= MAX_IMAGE_BYTES:
+                raise ValueError("单据原图过大或为空")
+            normalize_image(original, row.get("mime_type", ""))
+        except Exception as exc:
+            raise ValueError("单据原图无效") from exc
+        if len(original) != row.get("byte_length") or hashlib.sha256(
+            original
+        ).hexdigest() != row.get("sha256"):
+            raise ValueError("单据原图校验不匹配")
+        if row.get("status") not in ("recognizing", "recognized", "failed"):
+            raise ValueError("单据识别状态无效")
+        from app.schemas.receipt import ReceiptCandidate
+
+        ReceiptCandidate.model_validate(
+            {
+                "amount": row.get("amount"),
+                "expenseDate": row.get("expense_date"),
+                "currencyCode": row.get("currency_code"),
+                "merchant": row.get("merchant"),
+                "warnings": row.get("warnings"),
+            }
+        )
     seen_keys = set()
+    linked_receipts = set()
     for row in tables.get("expenses", []):
         ExpenseFields.model_validate(
             {
@@ -118,6 +163,11 @@ def validate_backup_payload(payload: dict[str, Any]) -> None:
             raise ValueError("开销来源无效")
         if row.get("account_id") is not None and str(row["account_id"]) not in account_ids:
             raise ValueError("开销关联账户不属于该备份")
+        if row.get("receipt_id") is not None:
+            receipt_id = str(row["receipt_id"])
+            if receipt_id not in receipt_ids or receipt_id in linked_receipts:
+                raise ValueError("开销关联单据缺失或重复")
+            linked_receipts.add(receipt_id)
         digest = row.get("request_hash", "")
         if (
             not isinstance(digest, str)
@@ -129,6 +179,12 @@ def validate_backup_payload(payload: dict[str, Any]) -> None:
 
 def create_backup(db: Session, user_id: uuid.UUID, purpose: str = "manual") -> BackupExport:
     payload = build_backup_payload(db, user_id)
+    if len(json.dumps(payload, ensure_ascii=False, indent=2).encode()) > 64 * 1024 * 1024:
+        from app.core.errors import ApiError
+
+        raise ApiError(
+            413, "BACKUP_FILE_TOO_LARGE", "网页备份超过 64 MB，请使用服务器全量备份（包含原图）"
+        )
     timestamp = utc_now().strftime("%Y%m%d-%H%M%S")
     item = BackupExport(
         id=uuid.uuid4(),
@@ -157,6 +213,8 @@ def _decoded_row(model: type[Any], raw: dict[str, Any]) -> dict[str, Any]:
             values[column.name] = date.fromisoformat(str(value))
         elif isinstance(column.type, (Numeric, ExpenseAmount)):
             values[column.name] = Decimal(str(value))
+        elif isinstance(column.type, LargeBinary):
+            values[column.name] = base64.b64decode(value, validate=True)
         else:
             values[column.name] = value
     return values
@@ -167,6 +225,7 @@ def restore_backup_payload(db: Session, user_id: uuid.UUID, payload: dict[str, A
     for model in (
         AuditLog,
         Expense,
+        Receipt,
         DebtEvent,
         DebtItem,
         MonthlySnapshot,

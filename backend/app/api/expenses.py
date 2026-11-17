@@ -9,7 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -22,6 +22,7 @@ from app.models.audit import AuditLog
 from app.models.common import utc_now
 from app.models.expense import Expense
 from app.models.institution import Institution
+from app.models.receipt import Receipt
 from app.schemas.asset import AccountResponse
 from app.schemas.expense import (
     ExpenseAccountResponse,
@@ -32,7 +33,12 @@ from app.schemas.expense import (
 )
 from app.schemas.receipt import ReceiptCandidate
 from app.services.fx import enabled_currency_codes
-from app.services.receipt import MAX_IMAGE_BYTES, normalize_image, recognize_receipt
+from app.services.receipt import (
+    MAX_IMAGE_BYTES,
+    normalize_image,
+    recognize_receipt,
+    reserve_archive,
+)
 
 router = APIRouter()
 DbDependency = Annotated[Session, Depends(get_db)]
@@ -50,10 +56,14 @@ def receipt_status(auth: CurrentAuthDependency):
 @router.post("/receipt-recognition", response_model=ReceiptCandidate)
 async def receipt_recognition(
     request: Request,
+    response: Response,
     auth: CurrentAuthDependency,
+    db: DbDependency,
     x_receipt_upload: Annotated[str | None, Header()] = None,
 ):
-    return await recognize_receipt_request(request, str(auth.user.id), x_receipt_upload)
+    return await recognize_receipt_request(
+        request, str(auth.user.id), x_receipt_upload, db=db, response=response
+    )
 
 
 async def recognize_receipt_request(
@@ -61,16 +71,17 @@ async def recognize_receipt_request(
     user_id: str,
     x_receipt_upload: str | None,
     reauthorize: Callable[[], None] = lambda: None,
+    *,
+    db: Session | None = None,
+    response: Response | None = None,
 ):
     # A non-simple header requires CORS preflight, preventing cross-site form uploads.
     if x_receipt_upload != "1":
         raise ApiError(400, "RECEIPT_UPLOAD_HEADER", "请从票据识别入口上传")
     settings = get_settings()
-    if not settings.openai_api_key.get_secret_value().strip():
-        raise ApiError(503, "RECEIPT_NOT_CONFIGURED", "收据识别尚未配置，请手工录入")
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-    if content_type not in {"image/png", "image/jpeg"}:
-        raise ApiError(415, "RECEIPT_IMAGE_TYPE", "仅支持 PNG、JPEG 图片")
+    if content_type not in {"image/png", "image/jpeg", "image/webp"}:
+        raise ApiError(415, "RECEIPT_IMAGE_TYPE", "仅支持 PNG、JPEG、WebP 图片")
     # Raw bounded streaming avoids multipart uploads spooling private images to disk.
     raw = bytearray()
     async for chunk in request.stream():
@@ -79,7 +90,52 @@ async def recognize_receipt_request(
         raw.extend(chunk)
     image = await run_in_threadpool(normalize_image, bytes(raw), content_type)
     reauthorize()
-    result = await recognize_receipt(image, settings, user_id)
+    # The unmounted, isolated capability experiment has no database. Both
+    # production routes supply db/response and always archive valid originals.
+    if db is None:
+        return await recognize_receipt(image, settings, user_id)
+    reserve_archive(user_id, settings.receipt_requests_per_minute)
+    receipt = Receipt(
+        id=uuid.uuid4(),
+        user_id=uuid.UUID(user_id),
+        original_image=bytes(raw),
+        mime_type=content_type,
+        byte_length=len(raw),
+        sha256=hashlib.sha256(raw).hexdigest(),
+        status="recognizing",
+    )
+    db.add(receipt)
+    try:
+        db.commit()  # The private original is durable before any paid recognition call.
+    except SQLAlchemyError:
+        db.rollback()
+        raise ApiError(503, "RECEIPT_ARCHIVE_FAILED", "原图保存失败，请稍后重试") from None
+    receipt_id = receipt.id
+    try:
+        result = await recognize_receipt(image, settings, user_id)
+        reauthorize()
+    except BaseException as failure:
+        receipt.status = "failed"
+        receipt.failure_code = (
+            failure.code if isinstance(failure, ApiError) else "RECEIPT_INTERRUPTED"
+        )
+        db.commit()
+        if isinstance(failure, ApiError):
+            raise ApiError(
+                failure.status_code,
+                failure.code,
+                failure.message,
+                [*failure.details, {"receiptId": str(receipt_id)}],
+            ) from None
+        raise
+    receipt.status = "recognized"
+    receipt.amount, receipt.expense_date = result.amount, result.expenseDate
+    receipt.currency_code, receipt.merchant = result.currencyCode, result.merchant
+    receipt.warnings = result.warnings
+    db.commit()
+    if response is not None:
+        response.headers["X-Receipt-Id"] = str(receipt_id)
+        response.headers["Cache-Control"] = "no-store"
     return result
 
 
@@ -105,6 +161,15 @@ def _validate_links(
         select(Account.id).where(Account.id == payload.account_id, Account.user_id == user_id)
     ):
         raise ApiError(404, "ACCOUNT_NOT_FOUND", "关联账户不存在")
+    if payload.receipt_id is not None:
+        receipt = db.scalar(
+            select(Receipt).where(Receipt.id == payload.receipt_id, Receipt.user_id == user_id)
+        )
+        if receipt is None:
+            raise ApiError(404, "RECEIPT_NOT_FOUND", "关联单据不存在")
+        linked = db.scalar(select(Expense).where(Expense.receipt_id == payload.receipt_id))
+        if linked is not None and (previous is None or linked.id != previous.id):
+            raise ApiError(409, "RECEIPT_ALREADY_LINKED", "该单据已关联开销记录")
 
 
 def _data(item: Expense) -> dict:
@@ -113,6 +178,8 @@ def _data(item: Expense) -> dict:
 
 def _request_hash(payload: ExpenseCreate) -> str:
     values = payload.model_dump(mode="json", exclude={"request_key", "allow_duplicate"})
+    if values.get("receipt_id") is None:
+        values.pop("receipt_id", None)  # Preserve replay hashes for pre-attachment clients.
     values["amount"] = str(payload.amount.quantize(Decimal("0.000001")))
     return hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
 
@@ -274,6 +341,10 @@ def create_expense(
             )
         )
         if winner is None:
+            if payload.receipt_id is not None and db.scalar(
+                select(Expense.id).where(Expense.receipt_id == payload.receipt_id)
+            ):
+                raise ApiError(409, "RECEIPT_ALREADY_LINKED", "该单据已关联开销记录") from None
             raise
         response.status_code = 200
         return _replay(winner, digest)
@@ -287,7 +358,10 @@ def update_expense(
     item = _owned(db, auth.user.id, entity_id)
     _validate_links(db, auth.user.id, payload, item)
     before = _data(item)
-    for key, value in payload.model_dump().items():
+    updates = payload.model_dump()
+    if "receipt_id" not in payload.model_fields_set:
+        updates.pop("receipt_id", None)
+    for key, value in updates.items():
         setattr(item, key, value)
     db.flush()
     db.add(

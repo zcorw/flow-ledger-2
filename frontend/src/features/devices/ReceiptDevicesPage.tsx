@@ -48,7 +48,7 @@ export function ReceiptDevicesPage() {
               <Typography sx={{ fontFamily: 'monospace', fontSize: 28 }}>{selectedCode.slice(0, 4)}-{selectedCode.slice(4)}</Typography>
               <Typography color="text.secondary">授权码有效至 {new Date(pairing.data.expiresAt).toLocaleString()}</Typography>
               {pairing.data.status === 'pending' ? <>
-                <Alert severity="info">仅允许识别收据，长期有效，可随时撤销。照片将发送给知产后端及其配置的识别服务。此授权不会创建开销或修改资产。</Alert>
+                <Alert severity="info">仅允许识别收据，长期有效，可随时撤销。原图与识别结果将保存在知产，方便以后查看；图片也会发送给配置的识别服务。此授权不会创建开销或修改资产。</Alert>
                 <FormControlLabel control={<Checkbox checked={acknowledged} disabled={decision.isPending} onChange={(event) => setAcknowledged(event.target.checked)} />} label="我已核对，授权码与眼镜显示一致" />
                 <Stack direction="row" spacing={1}>
                   <Button variant="contained" disabled={!acknowledged || decision.isPending} onClick={() => decision.mutate('approve')}>授权识别收据</Button>

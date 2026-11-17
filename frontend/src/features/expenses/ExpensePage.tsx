@@ -8,6 +8,10 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { archiveDraft } from '../receipts/archiveDraft';
+import type { StoredReceipt } from '../receipts/api';
+import { ReceiptImage } from '../receipts/ReceiptImage';
 import { ApiClientError } from '../../api/client';
 import { getCurrencies } from '../settings/api';
 import {
@@ -36,6 +40,8 @@ function ReceiptPreview({ file }: { file: File }) {
 }
 
 export function ExpensePage() {
+  const location = useLocation(), navigate = useNavigate();
+  const incomingReceipt = (location.state as { receipt?: StoredReceipt } | null)?.receipt;
   const theme = useTheme();
   const mobile = useMediaQuery(theme.breakpoints.down('sm'));
   const queryClient = useQueryClient();
@@ -45,12 +51,13 @@ export function ExpensePage() {
   const currencies = useQuery({ queryKey: ['currencies'], queryFn: getCurrencies });
   const accounts = useQuery({ queryKey: ['expense-accounts'], queryFn: getExpenseAccounts });
   const receiptStatus = useQuery({ queryKey: ['receipt-status'], queryFn: getReceiptStatus, retry: false });
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(emptyDraft);
+  const [open, setOpen] = useState(!!incomingReceipt);
+  const [draft, setDraft] = useState(() => incomingReceipt ? archiveDraft(incomingReceipt) : emptyDraft());
   const [editing, setEditing] = useState<Expense | null>(null);
-  const [source, setSource] = useState<Expense['source']>('manual');
+  const [source, setSource] = useState<Expense['source']>(incomingReceipt ? 'receipt_ocr' : 'manual');
   const requestKey = useRef(crypto.randomUUID());
-  const [hasDraft, setHasDraft] = useState(false);
+  const [hasDraft, setHasDraft] = useState(!!incomingReceipt);
+  const [imageId, setImageId] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [progress, setProgress] = useState({ percent: 0, status: '' });
@@ -65,6 +72,7 @@ export function ExpensePage() {
   const saveLock = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
   useEffect(() => () => { generation.current += 1; cancelOcr.current?.(); }, []);
+  useEffect(() => { if (location.state) void navigate(location.pathname, { replace: true, state: null }); }, [location.pathname, location.state, navigate]);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['expenses'] });
   const save = useMutation({
@@ -75,6 +83,7 @@ export function ExpensePage() {
       setOpen(false); setHasDraft(false); setFile(null); setFormError('');
       setNotice(editing ? '开销已更新' : '开销已保存');
       await invalidate();
+      await queryClient.invalidateQueries({ queryKey: ['receipts'] });
     },
     onError: (error) => {
       if (error instanceof ApiClientError && error.code === 'POSSIBLE_DUPLICATE') setDuplicate(true);
@@ -100,7 +109,7 @@ export function ExpensePage() {
   const edit = (item: Expense) => {
     stopOcr(); setEditing(item); setDraft({ expenseDate: item.expense_date, amount: item.amount,
       currencyCode: item.currency_code, category: item.category, merchant: item.merchant,
-      accountId: item.account_id, note: item.note });
+      accountId: item.account_id, note: item.note, receiptId: item.receipt_id });
     setSource(item.source); setHasDraft(true); setFile(null);
     setOcrWarnings([]); setFormError(''); setDuplicate(false); setReviewed(true); setOpen(true);
   };
@@ -125,7 +134,7 @@ export function ExpensePage() {
       setFile(selected);
       setOcrWarnings(candidate.warnings);
       setDraft((value) => ({ ...value, amount: candidate.amount, currencyCode: candidate.currencyCode,
-        expenseDate: candidate.expenseDate, merchant: candidate.merchant, category: 'uncategorized' }));
+        expenseDate: candidate.expenseDate, merchant: candidate.merchant, category: 'uncategorized', receiptId: candidate.receiptId ?? null }));
       setSource('receipt_ocr'); setReviewed(false); setDuplicate(false);
     } catch (error) {
       if (version === generation.current) setFormError(errorMessage(error));
@@ -143,6 +152,7 @@ export function ExpensePage() {
   };
   const setFilter = (patch: Partial<Filters>) => { setFilters((value) => ({ ...value, ...patch })); setPage(0); };
   const actions = (item: Expense) => <Stack direction="row" spacing={0.5}>
+    {item.receipt_id && <Button size="small" onClick={() => setImageId(item.receipt_id!)}>查看原图</Button>}
     <Button size="small" aria-label={`编辑开销 ${item.merchant || item.expense_date}`} onClick={() => edit(item)}>编辑</Button>
     <Button size="small" color="error" aria-label={`删除开销 ${item.merchant || item.expense_date}`} onClick={() => { remove.reset(); setDeleting(item); }}>删除</Button>
   </Stack>;
@@ -153,6 +163,7 @@ export function ExpensePage() {
       <Box><Typography component="h1" variant="h5" sx={{ fontWeight: 700 }}>每日开销</Typography>
         <Typography color="text.secondary" variant="body2" sx={{ mt: 0.75 }}>记下每一天的消费，按币种看清去向。</Typography></Box>
       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
+        <Button component={RouterLink} to="/receipts">识别单据</Button>
         {hasDraft && <Button onClick={() => setOpen(true)}>继续草稿</Button>}
         <Button variant="contained" startIcon={<AddOutlined />} onClick={startNew}>记一笔</Button>
       </Stack>
@@ -217,7 +228,7 @@ export function ExpensePage() {
             {receiptStatus.data?.model && <Typography variant="body2" sx={{ mb: 1, overflowWrap: 'anywhere' }}>
               当前识别模型：{receiptStatus.data.model}
             </Typography>}
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>选择图片后，将通过服务器发送给 OpenAI 识别，并产生 API 费用。支持不同语言和版式，每张票据生成一笔合计候选，请核对后保存。请先遮盖不需要识别的个人信息。</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>选择图片后，将通过服务器发送给 OpenAI 识别，并产生 API 费用。原图与识别结果会保存在知产，可从“识别单据”查看。请先遮盖不需要保存的个人信息，核对后再保存开销。</Typography>
             {receiptStatus.data?.configured === false && <Alert severity="info">收据识别尚未配置，请联系管理员或手工录入。</Alert>}
             {receiptStatus.isError && <Alert severity="warning" action={<Button onClick={() => void receiptStatus.refetch()}>重试</Button>}>暂时无法检查识别服务，可继续手工录入。</Alert>}
             <input ref={fileInput} type="file" accept="image/png,image/jpeg" aria-label="选择票据图片并发送识别" disabled={ocrBusy || save.isPending || receiptStatus.data?.configured !== true} onChange={(e) => { const selected = e.target.files?.[0]; e.target.value = ''; if (selected) void selectImage(selected); }} />
@@ -225,6 +236,7 @@ export function ExpensePage() {
           </Box>}
           {ocrBusy && <Box role="status" aria-live="polite"><Typography variant="body2">{progress.status}</Typography><LinearProgress sx={{ my: 1 }} /><Button onClick={() => { stopOcr(); setFormError('已取消等待，草稿保留。已发送的请求仍可能计费。'); }}>取消识别</Button></Box>}
           {file && <ReceiptPreview file={file} />}
+          {draft.receiptId && <Button onClick={() => setImageId(draft.receiptId!)}>查看关联原图</Button>}
           {ocrWarnings.map((warning) => <Alert severity="warning" key={warning}>{warning}</Alert>)}
           {formError && <Alert severity="error">{formError} 草稿已保留，可修正或原样重试。</Alert>}
           {(currencies.isError || accounts.isError) && <Alert severity="warning">币种或账户加载失败，请刷新后继续。</Alert>}
@@ -259,5 +271,6 @@ export function ExpensePage() {
         {remove.isError && <Alert severity="error">{errorMessage(remove.error)}</Alert>}
       </DialogContent><DialogActions><Button disabled={remove.isPending} onClick={() => setDeleting(null)}>取消</Button><Button color="error" disabled={remove.isPending} onClick={() => deleting && remove.mutate(deleting.id)}>确认删除</Button></DialogActions>
     </Dialog>
+    {imageId && <ReceiptImage key={imageId} id={imageId} onClose={() => setImageId(null)} />}
   </Stack>;
 }

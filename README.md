@@ -29,7 +29,7 @@ The project centers on monthly asset snapshots and also supports independent dai
 
 Daily expenses support manual entry and image-assisted filling. The backend calls the OpenAI Responses API, with the default low-cost model `gpt-6-luna`. Review amount, date, currency and merchant before saving. Daily expenses do not affect monthly asset statistics.
 
-Set `OPENAI_API_KEY` only in the backend environment file; use `RECEIPT_MODEL` to change models. Never prefix the key with `VITE_` or expose it in the frontend. Manual entry remains available without a key. Photos are sent to OpenAI and may incur charges; the application does not save photos or raw recognition text. See [receipt configuration, cost controls and privacy](docs/10-openai-receipts.md).
+Set `OPENAI_API_KEY` only in the backend environment file; use `RECEIPT_MODEL` to change models. Never prefix the key with `VITE_` or expose it in the frontend. Manual entry remains available without a key. Photos are sent to OpenAI and may incur charges; original photos and recognized candidate fields are privately archived for later review; raw provider text is not stored. See [receipt configuration, cost controls and privacy](docs/10-openai-receipts.md).
 
 ### OpenAI Configuration
 
@@ -44,9 +44,13 @@ RECEIPT_REQUESTS_PER_MINUTE=6
 
 For an existing local Docker deployment, run `docker compose up -d --build --no-deps --force-recreate backend` at the project root, then sign in and refresh Daily Expenses. Restart the backend process when running Python directly. Production commands and troubleshooting are documented in [OpenAI configuration](docs/10-openai-receipts.md#模型与配置).
 
+## Original receipts
+
+Open **Daily Expenses → Recognized receipts** to review uploaded originals and their results, including incomplete or failed recognition. A saved expense can reference its receipt and open the same original. Uploaded bytes are stored in the VPS PostgreSQL persistent volume, included in full backups, and available only to the signed-in owner. No expense is created automatically. Web JSON backups include images (64 MiB limit); larger archives use server full backups. New deployment requires migration `0013_receipt_originals`. Older photos that were never saved cannot be recovered. See [original receipt storage](docs/receipt-originals.md).
+
 ## Rokid Device Authorization
 
-Sign in on the phone and open **Settings → Device authorization**, enter the glasses code and explicitly approve receipt recognition. The direct `/receipt-devices` URL remains available for glasses pairing links. Pairing lasts 10 minutes; the receipt-only grant remains valid until revoked or the account password changes. The glasses remember it across Agent exit and device restart; clearing Agent data requires authorization again. The grant cannot create expenses or modify assets; it can be revoked from the same page. Deploy both frontend/backend, run migration `0012_persistent_devices` and use the canonical HTTPS `APP_BASE_URL` before updating the glasses. See [device protocol and deployment](docs/receipt-devices.md).
+Sign in on the phone and open **Settings → Device authorization**, enter the glasses code and explicitly approve receipt recognition. The direct `/receipt-devices` URL remains available for glasses pairing links. Pairing lasts 10 minutes; the receipt-only grant remains valid until revoked or the account password changes. The glasses remember it across Agent exit and device restart; clearing Agent data requires authorization again. The grant cannot create expenses or modify assets; it can be revoked from the same page. Deploy both frontend/backend, run migration `0013_receipt_originals` and use the canonical HTTPS `APP_BASE_URL` before updating the glasses. See [device protocol and deployment](docs/receipt-devices.md).
 
 ## Dashboard Calculation Rules
 

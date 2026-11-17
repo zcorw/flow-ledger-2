@@ -78,7 +78,7 @@ export function AppLayout() {
   }, [mobileOpen]);
   const activeItem = location.pathname === '/history'
     ? { label: '历史快照', path: '/history' }
-    : (navItems.find((item) => item.path === (location.pathname === '/receipt-devices' ? '/settings' : location.pathname)) ?? navItems[0]);
+    : (navItems.find((item) => item.path === (location.pathname === '/receipt-devices' ? '/settings' : location.pathname === '/receipts' ? '/expenses' : location.pathname)) ?? navItems[0]);
   const compactPageTitle = useCompactPageTitle(location.pathname, activeItem.label, Boolean(user));
   if (!user) return null;
 

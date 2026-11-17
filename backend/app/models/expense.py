@@ -59,5 +59,8 @@ class Expense(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     source: Mapped[str] = mapped_column(String(20), default="manual")
     request_key: Mapped[uuid.UUID] = mapped_column(Uuid)
     request_hash: Mapped[str] = mapped_column(String(64))
+    receipt_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("receipts.id"), nullable=True, unique=True
+    )
     # Retain the idempotency key after deletion so delayed retries never recreate a record.
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

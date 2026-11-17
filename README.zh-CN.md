@@ -28,7 +28,7 @@
 
 每日开销支持手工录入和图片辅助填写。图片识别通过后端调用 OpenAI Responses API，默认低成本模型为 `gpt-6-luna`；金额、日期、币种和商户均需人工核对后保存，不影响月度资产统计。
 
-在后端使用的 `.env`（生产环境为部署所用环境文件）设置 `OPENAI_API_KEY`，可用 `RECEIPT_MODEL` 调整模型。密钥不得使用 `VITE_` 前缀或放入前端。未配置时仍可手工录入。图片会发送给 OpenAI，可能产生费用；本应用不保存图片或识别原文。完整配置、费用控制与隐私边界见 [收据识别说明](docs/10-openai-receipts.md)。
+在后端使用的 `.env`（生产环境为部署所用环境文件）设置 `OPENAI_API_KEY`，可用 `RECEIPT_MODEL` 调整模型。密钥不得使用 `VITE_` 前缀或放入前端。未配置时仍可手工录入。图片会发送给 OpenAI，可能产生费用；原图和识别候选字段会私有保存，方便以后查看；不保存识别服务的原始响应正文。完整配置、费用控制与隐私边界见 [收据识别说明](docs/10-openai-receipts.md)。
 
 ### OpenAI 配置
 
@@ -43,9 +43,13 @@ RECEIPT_REQUESTS_PER_MINUTE=6
 
 已有本地 Docker 环境修改配置后，在项目根目录执行 `docker compose up -d --build --no-deps --force-recreate backend`，然后登录并刷新“每日开销”页面。直接运行 Python 时需重启后端进程。生产环境生效命令、配置检查及常见错误见 [OpenAI 配置步骤](docs/10-openai-receipts.md#模型与配置)。
 
+## 单据原图
+
+从 **每日开销 → 识别单据** 查看上传原图及识别结果，字段不全或识别失败的单据也可保留原图。保存为开销后可继续关联并查看同一原图。原始字节保存在 VPS 的 PostgreSQL 持久卷中，纳入全量备份，仅登录后的所属用户可访问，不自动记账。网页 JSON 备份包含图片（上限 64 MiB），更大的归档使用服务器全量备份。新版本部署需要迁移 `0013_receipt_originals`；此前未保存的照片无法补回。详见[原图存储说明](docs/receipt-originals.zh-CN.md)。
+
 ## Rokid 设备授权
 
-手机登录后从 **设置 → 设备授权** 进入，输入眼镜授权码并明确允许收据识别。保留 `/receipt-devices` 直达地址供眼镜配对链接使用。配对码 10 分钟有效，识别专用授权长期有效，直到撤销或修改账号密码。眼镜退出 Agent 或重启后自动恢复授权，清除 Agent 数据后需重新授权。授权不能创建开销或修改资产；可在同页撤销。更新眼镜前应配套部署前后端、执行迁移 `0012_persistent_devices`，并设置规范 HTTPS `APP_BASE_URL`。详见[设备协议及部署](docs/receipt-devices.zh-CN.md)。
+手机登录后从 **设置 → 设备授权** 进入，输入眼镜授权码并明确允许收据识别。保留 `/receipt-devices` 直达地址供眼镜配对链接使用。配对码 10 分钟有效，识别专用授权长期有效，直到撤销或修改账号密码。眼镜退出 Agent 或重启后自动恢复授权，清除 Agent 数据后需重新授权。授权不能创建开销或修改资产；可在同页撤销。更新眼镜前应配套部署前后端、执行迁移 `0013_receipt_originals`，并设置规范 HTTPS `APP_BASE_URL`。详见[设备协议及部署](docs/receipt-devices.zh-CN.md)。
 
 ## 首页统计口径
 

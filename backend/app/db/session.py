@@ -18,6 +18,7 @@ def get_engine() -> Engine:
     return create_engine(
         database_url,
         pool_pre_ping=True,
+        hide_parameters=True,  # Never include original image bytes in database error logs.
         connect_args=connect_args,
         **engine_kwargs,
     )

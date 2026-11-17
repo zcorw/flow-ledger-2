@@ -171,7 +171,7 @@ def revoke(device_id: uuid.UUID, request: Request, auth: CurrentAuthDependency, 
 
 
 @router.post("/receipt-recognition", response_model=ReceiptCandidate)
-async def recognize(request: Request, db: Db):
+async def recognize(request: Request, response: Response, db: Db):
     authorization = request.headers.get("authorization", "")
     grant = devices.authenticate_device(db, authorization)
     user_id = str(grant.user_id)
@@ -181,7 +181,12 @@ async def recognize(request: Request, db: Db):
         devices.authenticate_device(db, authorization)
 
     result = await recognize_receipt_request(
-        request, user_id, request.headers.get("x-receipt-upload"), reauthorize
+        request,
+        user_id,
+        request.headers.get("x-receipt-upload"),
+        reauthorize,
+        db=db,
+        response=response,
     )
     reauthorize()
     grant.last_used_at = devices.now()

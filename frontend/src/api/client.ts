@@ -19,7 +19,8 @@ export class ApiClientError extends Error {
   }
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiRequest<T>(path: string, options: RequestInit & { onResponse?: (response: Response) => void } = {}): Promise<T> {
+  const { onResponse, ...init } = options;
   const isFormData = init.body instanceof FormData;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -41,6 +42,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   }
 
   if (response.status === 204) return undefined as T;
+  onResponse?.(response);
   return response.json() as Promise<T>;
 }
 

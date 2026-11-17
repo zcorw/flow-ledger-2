@@ -281,9 +281,9 @@ async def upload_backup(
     db: DbDependency,
     file: Annotated[UploadFile, File()],
 ) -> BackupExport:
-    content = await file.read()
-    if len(content) > 10 * 1024 * 1024:
-        raise ApiError(413, "BACKUP_FILE_TOO_LARGE", "备份文件不能超过 10 MB")
+    content = await file.read(64 * 1024 * 1024 + 1)
+    if len(content) > 64 * 1024 * 1024:
+        raise ApiError(413, "BACKUP_FILE_TOO_LARGE", "网页备份文件不能超过 64 MB")
     try:
         payload: dict[str, Any] = json.loads(content)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
