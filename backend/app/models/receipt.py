@@ -25,3 +25,7 @@ class Receipt(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     merchant: Mapped[str] = mapped_column(String(150), default="")
     warnings: Mapped[list[str]] = mapped_column(JSON, default=list)
     failure_code: Mapped[str] = mapped_column(String(64), default="")
+    draft_values: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    draft_revision: Mapped[int] = mapped_column(default=0, server_default="0")
+    draft_request_key: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    draft_request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)

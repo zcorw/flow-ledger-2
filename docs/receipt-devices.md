@@ -2,6 +2,8 @@
 
 **English** | [简体中文](receipt-devices.zh-CN.md)
 
+The default grant remains receipt-only. This development branch additionally supports voice corrections and drafts, plus a separately acknowledged, revocable device accounting permission. Existing grants are not upgraded. See [review workflow, API and recovery](receipt-review-workflow.md); migrate through `0015_device_expense_grants` and deploy both sides before installing the new glasses package.
+
 Rokid uses a separate persistent, revocable bearer grant. The signed-in owner opens **Settings → Device authorization** and explicitly approves the matching code. Direct `/receipt-devices` pairing links remain supported. This permits receipt recognition only; it cannot create expenses or modify assets. Recognition produces a candidate for review, not a saved expense.
 
 ## Deployment

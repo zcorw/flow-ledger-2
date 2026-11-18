@@ -1,9 +1,9 @@
-import { Alert, Box, Button, Checkbox, FormControlLabel, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Paper, Stack, TextField, Typography } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { ApiClientError } from '../../api/client';
-import { decidePairing, getPairing, listReceiptDevices, revokeReceiptDevice } from './api';
+import { decidePairing, getPairing, listReceiptDevices, revokeReceiptDevice, setExpensePermission, type ReceiptDevice } from './api';
 
 const normalized = (value: string) => value.replace(/[-\s]/g, '').toUpperCase();
 const message = (error: unknown) => error instanceof ApiClientError ? error.message : '请求失败，请稍后重试';
@@ -13,6 +13,8 @@ export function ReceiptDevicesPage() {
   const [code, setCode] = useState(search.get('code') ?? '');
   const [selectedCode, setSelectedCode] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
+  const [expenseTarget, setExpenseTarget] = useState<ReceiptDevice | null>(null);
+  const [expenseAcknowledged, setExpenseAcknowledged] = useState(false);
   const queryClient = useQueryClient();
   const pairing = useQuery({ queryKey: ['receipt-pairing', selectedCode], queryFn: () => getPairing(selectedCode), enabled: selectedCode.length === 8, retry: false });
   const devices = useQuery({ queryKey: ['receipt-devices'], queryFn: listReceiptDevices, retry: false });
@@ -25,6 +27,10 @@ export function ReceiptDevicesPage() {
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['receipt-devices'] }); },
   });
   const codeValid = /^[A-HJ-NP-Z2-9]{8}$/.test(normalized(code));
+  const expensePermission = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => setExpensePermission(id, enabled),
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['receipt-devices'] }); setExpenseTarget(null); setExpenseAcknowledged(false); },
+  });
   return (
     <Stack spacing={3} sx={{ maxWidth: 720 }}>
       <Button component={RouterLink} to="/settings" sx={{ alignSelf: 'flex-start' }}>返回设置</Button>
@@ -65,14 +71,27 @@ export function ReceiptDevicesPage() {
         <Typography component="h2" variant="h6">有效授权</Typography>
         {devices.error && <Alert severity="error">{message(devices.error)}</Alert>}
         {revoke.error && <Alert severity="error">{message(revoke.error)}</Alert>}
+        {expensePermission.error && <Alert severity="error">{message(expensePermission.error)}</Alert>}
         {devices.data?.length === 0 && <Typography color="text.secondary">暂无有效设备授权。</Typography>}
-        {devices.data?.map((device) => <Paper key={device.id} variant="outlined" sx={{ p: 2 }}>
+        {devices.data?.map((device) => <Paper key={device.id} variant="outlined" sx={{ p: 2, ...(search.get('device') === device.id ? { borderColor: 'primary.main', borderWidth: 2 } : {}) }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}>
             <Box><Typography sx={{ fontWeight: 600 }}>{device.deviceName}</Typography><Typography color="text.secondary" variant="body2">收据识别 · {device.expiresAt ? new Date(device.expiresAt).toLocaleString() + ' 到期' : '长期有效'}</Typography></Box>
-            <Button color="error" disabled={revoke.isPending} onClick={() => revoke.mutate(device.id)}>撤销授权</Button>
+            <Stack direction="row" spacing={1}><Button disabled={expensePermission.isPending} onClick={() => {
+              if (device.canCreateExpenses) expensePermission.mutate({ id: device.id, enabled: false });
+              else { setExpenseTarget(device); setExpenseAcknowledged(false); expensePermission.reset(); }
+            }}>{device.canCreateExpenses ? '撤销入账权限' : '允许确认入账'}</Button><Button color="error" disabled={revoke.isPending} onClick={() => revoke.mutate(device.id)}>撤销授权</Button></Stack>
           </Stack>
         </Paper>)}
       </Stack>
+      <Dialog open={!!expenseTarget} onClose={() => { if (!expensePermission.isPending) setExpenseTarget(null); }} fullWidth maxWidth="sm">
+        <DialogTitle>允许设备确认入账</DialogTitle><DialogContent><Stack spacing={2}>
+          <Typography>{expenseTarget?.deviceName}</Typography>
+          <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>设备标识：{expenseTarget?.id}</Typography>
+          <Alert severity="warning">允许后，此设备可在你逐笔点击「确认」后创建真实开销，并关联已保存的单据原图。语音修改和保存草稿不会入账。此权限不会修改资产余额，可随时单独撤销。</Alert>
+          {expensePermission.error && <Alert severity="error">{message(expensePermission.error)}</Alert>}
+          <FormControlLabel control={<Checkbox checked={expenseAcknowledged} disabled={expensePermission.isPending} onChange={event => setExpenseAcknowledged(event.target.checked)} />} label="我已核对此设备，并允许逐笔确认入账" />
+        </Stack></DialogContent><DialogActions><Button disabled={expensePermission.isPending} onClick={() => setExpenseTarget(null)}>取消</Button><Button variant="contained" disabled={!expenseTarget || !expenseAcknowledged || expensePermission.isPending} onClick={() => { if (expenseTarget) expensePermission.mutate({ id: expenseTarget.id, enabled: true }); }}>确认授权入账</Button></DialogActions>
+      </Dialog>
     </Stack>
   );
 }

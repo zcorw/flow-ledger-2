@@ -9,3 +9,10 @@ test('archived candidates preserve their association and leave unknown fields em
   expect(draft.expenseDate).toBe(''); expect(draft.currencyCode).toBe(''); expect(draft.merchant).toBe('');
   expect(draft.accountId).toBeNull(); expect(draft.category).toBe('uncategorized');
 });
+
+test('continues saved fields without inventing a category or account', () => {
+  const receipt = { id: 'receipt', amount: '1', expenseDate: '', currencyCode: '', merchant: '',
+    draftValues: { amount: '614', expenseDate: '', currencyCode: 'JPY', merchant: '已修正',
+      category: '' as const, accountId: '', accountName: '', note: '草稿' } } as Parameters<typeof archiveDraft>[0];
+  expect(archiveDraft(receipt)).toMatchObject({ amount: '614', merchant: '已修正', category: '', accountId: null, note: '草稿' });
+});

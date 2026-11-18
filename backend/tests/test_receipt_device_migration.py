@@ -1,8 +1,9 @@
+import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect, select
+from sqlalchemy import MetaData, Table, create_engine, inspect, select
 from sqlalchemy.orm import Session
 
 from alembic import command
@@ -30,14 +31,17 @@ def test_persistent_device_upgrade_preserves_finite_grants_and_rollback_invalida
         db.add(user)
         db.flush()
         owner_id = user.id
-        db.add(
-            ReceiptDevice(
-                user_id=owner_id,
+        legacy = Table("receipt_devices", MetaData(), autoload_with=engine)
+        db.execute(
+            legacy.insert().values(
+                id=uuid.uuid4().hex,
+                user_id=owner_id.hex,
                 token_hash="a" * 64,
                 password_fingerprint="b" * 64,
                 resource="https://ledger.example",
                 device_name="Finite",
                 expires_at=finite_until,
+                created_at=datetime.now(UTC),
             )
         )
         db.commit()
@@ -48,6 +52,7 @@ def test_persistent_device_upgrade_preserves_finite_grants_and_rollback_invalida
     )["nullable"]
     with Session(engine) as db:
         assert as_utc(db.scalar(select(ReceiptDevice)).expires_at) == finite_until
+        assert db.scalar(select(ReceiptDevice)).expense_write_enabled is False
         db.add(
             ReceiptDevice(
                 user_id=owner_id,
@@ -56,6 +61,7 @@ def test_persistent_device_upgrade_preserves_finite_grants_and_rollback_invalida
                 resource="https://ledger.example",
                 device_name="Permanent",
                 expires_at=None,
+                expense_write_enabled=True,
             )
         )
         db.commit()
@@ -64,9 +70,12 @@ def test_persistent_device_upgrade_preserves_finite_grants_and_rollback_invalida
         c for c in inspect(engine).get_columns("receipt_devices") if c["name"] == "expires_at"
     )["nullable"]
     with Session(engine) as db:
-        rows = {row.device_name: row for row in db.scalars(select(ReceiptDevice)).all()}
-        assert as_utc(rows["Finite"].expires_at) == finite_until
-        assert as_utc(rows["Permanent"].expires_at) <= datetime.now(UTC)
+        legacy = Table("receipt_devices", MetaData(), autoload_with=engine)
+        rows = {row["device_name"]: row for row in db.execute(select(legacy)).mappings()}
+        assert as_utc(rows["Finite"]["expires_at"]) == finite_until
+        assert as_utc(rows["Permanent"]["expires_at"]) <= datetime.now(UTC)
     command.upgrade(config, "head")
     command.check(config)
+    with Session(engine) as db:
+        assert all(not row.expense_write_enabled for row in db.scalars(select(ReceiptDevice)))
     engine.dispose()
