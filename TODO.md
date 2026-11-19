@@ -1,5 +1,7 @@
 # Project Summary
 
+- [x] T020 [P1] Rokid field-scoped voice editing and complete choices, code stage (Zhixu a29b2c56-605f-46ee-bb29-1311d6e94ae4): authenticated complete options, explicit field boundaries and conservative fuzzy matching; whole-bill requests remain compatible. Backend lint and 139 tests passed (92.70% coverage), including owned/active choices beyond 100 accounts, fuzzy ambiguity, target isolation and no expense writes. English/Chinese README and workflow updated together. Backend deployment and new Rokid resource/device acceptance remain pending.
+
 Flow Ledger 是一个面向个人私有使用的资金资产管理 Web 应用。MVP 以手工维护“机构 → 账户 → 项目 → 月度快照”为主流程，通过快照日历史汇率统一折算为 CNY，并结合独立的债权债务事件账本生成资产看板。产品采用 Desktop Web 优先的财务后台形态，不追踪消费流水、不连接银行或券商 API，也不计算真实投资收益。
 
 本轮先交付 `prototype/` 下的静态页面原型，用于确认整体视觉语言、信息架构和页面元素；正式 React/FastAPI 开发在原型确认后按里程碑推进。

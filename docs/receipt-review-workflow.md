@@ -6,7 +6,7 @@ This source increment requires the matching Rokid package and both migrations `0
 
 ## User flow
 
-The glasses show merchant, amount, date, account and category with fixed labels. Unknown values stay empty; confirmed ISO currency codes accompany their symbols. Direction keys select Voice edit, Draft or Confirm.
+The glasses show merchant, amount, date, account and category with fixed labels. Unknown values stay empty; confirmed ISO currency codes accompany their symbols. Direction keys/swipes highlight seven editable fields before Voice edit, Draft and Confirm; clicking a field opens its own voice view.
 
 - Voice edit starts a `SpeechRecognition` session only after activation. The transcript, current fields, enabled currencies and account names are processed by the configured server-side model with `store: false` and a strict JSON schema. Invalid changes are rejected, unspecified fields stay unchanged, and ambiguous accounts/currencies require clarification. No audio, raw provider reply or expense is stored by this action. A runtime without speech support can use the website to edit.
 - Draft updates one versioned candidate on the same receipt. It preserves the original bytes and does not create an expense. Website users can filter unposted drafts, search merchants, edit fields and explicitly record an expense. JSON v4 backups include drafts and continue to support older backups.
@@ -18,13 +18,16 @@ All device routes below use the existing bearer token under `/api/v1/receipt-dev
 
 | Method and path | Contract |
 | --- | --- |
-| POST `/review-correction` | `{transcript, values}` → `{values, changedFields, warnings}`; bounded body and model request rate/concurrency limits |
+| GET `/review-options` | `{version: 1, categories, currencies, accounts}`; complete value/label/aliases choices; active owned accounts only, no pagination or silent 100-account limit |
+| POST `/review-correction` | `{transcript, values, targetField?}` → `{values, changedFields, warnings, fieldOutcome?}`; scoped enumerated fields need no model call |
 | POST `/receipt-drafts` | `{receiptId, requestKey, expectedRevision, values}` → saved revision; same-key replay, different-content conflict and optimistic stale-edit protection |
 | GET `/receipt-drafts/{id}` | Fields/revision of a known owned receipt; never image bytes or an archive listing |
 | GET `/capabilities` | Device ID, accounting permission and canonical phone authorization URL; a read does not grant permission |
 | POST `/{id}/expense-permission` | **Web owner session only**, `X-Device-Approval: 1`, same-origin intent and `{enabled: boolean}`; no grant from a device token or URL parameter |
 | POST `/receipt-confirmations` | `{receiptId, revision, requestKey, confirmed: true, allowDuplicate?: boolean}`; guarded snapshot and device-permission checks; reuses the existing expense writer, validation, audit and uniqueness constraints |
 | GET `/receipt-confirmations/{key}?receiptId={id}` | Read-only outcome: `not_found`, `recorded` with the record, or `deleted`; requires ownership and still works after accounting permission alone is disabled |
+
+The paired backend adds `GET /review-options` (version 1; complete categories, enabled currencies and active owned accounts) and optional `targetField` on `POST /review-correction`. Scoped replies add `fieldOutcome`: `matched`, `unchanged`, `ambiguous` or `unmatched`. Client/server both enforce the field boundary. Enumerated fields use exact normalized labels/aliases, unique contained names, then conservative text similarity (at least 0.72 with a 0.15 lead); close competitors/negations require clarification. This is not general phonetic/semantic matching. Free fields use the existing model with an explicit target; other returned fields are discarded. There are no financial writes. Choices stay in memory and clear on hide/exit. Deploy this backend increment before installing the native package; unavailable/invalid choices fail explicitly. Existing requests without a target retain their earlier behavior.
 
 Web owners save drafts through `POST /api/v1/receipts/drafts` with the same draft payload. `GET /api/v1/receipts?drafts=true&q=merchant` filters unposted drafts and searches original/corrected merchant names. Foreign receipts/accounts are rejected. Deleting an expense retains its idempotency tombstone and original receipt, and cannot recreate that expense by replay.
 
