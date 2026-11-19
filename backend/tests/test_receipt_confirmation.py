@@ -254,3 +254,54 @@ def test_duplicate_receipts_require_an_explicit_second_confirmation(rig):
         == 201
     )
     assert owner.get("/api/v1/expenses").json()["total"] == 2
+
+
+def test_disabled_institution_blocks_new_confirmation_but_not_draft_edit_or_replay(rig):
+    owner, device, headers, device_id, draft, payload = setup(rig)
+    institution_data = {"name": "Payment bank", "institutionType": "bank"}
+    institution = owner.post("/api/v1/institutions", json=institution_data)
+    assert institution.status_code == 201
+    institution_id = institution.json()["id"]
+    account_id = draft["values"]["accountId"]
+    moved = owner.put(
+        f"/api/v1/accounts/{account_id}",
+        json={
+            "name": "Receipt wallet",
+            "accountType": "cash_wallet",
+            "institutionId": institution_id,
+        },
+    )
+    assert moved.status_code == 200
+    grant_url = BASE + f"/{device_id}/expense-permission"
+    assert owner.post(grant_url, headers=INTENT, json={"enabled": True}).status_code == 200
+    institution_url = f"/api/v1/institutions/{institution_id}"
+
+    def set_eligibility(enabled):
+        result = owner.put(
+            institution_url, json={**institution_data, "canBePaymentAccount": enabled}
+        )
+        assert result.status_code == 200
+
+    set_eligibility(False)
+    next_draft = {
+        **draft,
+        "expectedRevision": 1,
+        "requestKey": str(uuid.uuid4()),
+        "values": {**draft["values"], "note": "Keep historical choice"},
+    }
+    draft_response = device.post(BASE + "/receipt-drafts", headers=headers, json=next_draft)
+    assert draft_response.status_code == 200
+    assert draft_response.json()["values"]["accountId"] == account_id
+
+    payload = {**payload, "revision": 2}
+    confirm_url = BASE + "/receipt-confirmations"
+    blocked = device.post(confirm_url, headers=headers, json=payload)
+    assert blocked.status_code == 422
+    assert owner.get("/api/v1/expenses").json()["total"] == 0
+    set_eligibility(True)
+    posted = device.post(confirm_url, headers=headers, json=payload)
+    assert posted.status_code == 201
+    set_eligibility(False)
+    replay = device.post(confirm_url, headers=headers, json=payload)
+    assert replay.status_code == 200
+    assert replay.json()["record"]["id"] == posted.json()["record"]["id"]

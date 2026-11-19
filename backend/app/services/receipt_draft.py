@@ -35,7 +35,10 @@ def result(row: Receipt):
 
 def save(db: Session, user_id: uuid.UUID, payload: DraftRequest):
     row = owned(db, user_id, payload.receipt_id, lock=True)
-    values = validate_review(db, user_id, payload.values).model_dump(by_alias=True)
+    retained_account_id = (row.draft_values or {}).get("accountId", "")
+    values = validate_review(
+        db, user_id, payload.values, retained_account_id=retained_account_id
+    ).model_dump(by_alias=True)
     digest = hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
     key = str(payload.request_key)
 

@@ -200,3 +200,54 @@ def test_exact_current_free_field_is_unchanged_without_model_inference(rig, monk
         assert result["changedFields"] == [] and result["warnings"] == []
         for key, value in values.items():
             assert result["values"][key] == value
+
+
+def test_receipt_options_and_voice_changes_exclude_ineligible_institution_accounts(
+    rig, monkeypatch
+):
+    owner, device, _, _ = rig
+    institution = owner.post(
+        "/api/v1/institutions",
+        json={
+            "name": "Investment institution",
+            "institutionType": "broker",
+            "canBePaymentAccount": False,
+        },
+    )
+    assert institution.status_code == 201
+    blocked = owner.post(
+        "/api/v1/accounts",
+        json={
+            "name": "Brokerage",
+            "accountType": "brokerage",
+            "institutionId": institution.json()["id"],
+        },
+    )
+    assert blocked.status_code == 201
+    eligible = account(owner, "Broker")
+    auth = headers(rig)
+    choices = device.get(BASE + "/review-options", headers=auth).json()["accounts"]
+    assert eligible["id"] in {choice["value"] for choice in choices}
+    assert blocked.json()["id"] not in {choice["value"] for choice in choices}
+    scoped = device.post(
+        BASE + "/review-correction",
+        headers=auth,
+        json={"values": {}, "transcript": "支付方式改成Brokerage", "targetField": "account"},
+    )
+    assert scoped.status_code == 200
+    assert scoped.json()["fieldOutcome"] == "unmatched"
+    assert scoped.json()["values"]["accountId"] == ""
+
+    async def infer(data, *args):
+        assert {"name": "Brokerage"} not in data["accounts"]
+        return patch(accountName="Brokerage")
+
+    monkeypatch.setattr(review, "infer_patch", infer)
+    response = device.post(
+        BASE + "/review-correction",
+        headers=auth,
+        json={"values": {}, "transcript": "Use brokerage"},
+    )
+    assert response.status_code == 200
+    assert response.json()["values"]["accountId"] == ""
+    assert response.json()["warnings"]

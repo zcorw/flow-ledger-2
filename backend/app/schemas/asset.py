@@ -25,6 +25,7 @@ class NamedPayload(BaseModel):
 
 
 class InstitutionPayload(NamedPayload):
+    can_be_payment_account: bool = Field(default=True, alias="canBePaymentAccount", strict=True)
     institution_type: InstitutionType = Field(alias="institutionType")
 
 
@@ -36,6 +37,7 @@ class InstitutionResponse(BaseModel):
     institution_type: str
     display_color: str | None
     is_active: bool
+    can_be_payment_account: bool
     account_count: int = 0
     project_count: int = 0
 

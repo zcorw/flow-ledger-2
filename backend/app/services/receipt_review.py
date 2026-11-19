@@ -38,7 +38,9 @@ equals the current value; null means that no reliable new value was specified.
 """
 
 
-def validate_review(db: Session, user_id: uuid.UUID, values: ReviewFields) -> ReviewFields:
+def validate_review(
+    db: Session, user_id: uuid.UUID, values: ReviewFields, *, retained_account_id: str = ""
+) -> ReviewFields:
     data = values.model_dump(by_alias=True)
     if values.category and values.category not in get_args(ExpenseCategory):
         raise ApiError(422, "REVIEW_CATEGORY_INVALID", "分类无效，请重新选择")
@@ -48,19 +50,23 @@ def validate_review(db: Session, user_id: uuid.UUID, values: ReviewFields) -> Re
             account_id = uuid.UUID(values.account_id)
         except ValueError:
             raise ApiError(422, "REVIEW_ACCOUNT_INVALID", "账户无效") from None
-        account = db.scalar(
-            select(Account).where(
-                Account.id == account_id, Account.user_id == user_id, Account.is_active.is_(True)
+        # A retained account is only valid for editing a candidate, not for new posting.
+        statement = receipt_field_review.payment_accounts(user_id)
+        if values.account_id == retained_account_id:
+            statement = select(Account).where(
+                Account.user_id == user_id, Account.is_active.is_(True)
             )
-        )
+        account = db.scalar(statement.where(Account.id == account_id))
         if account is None:
-            raise ApiError(422, "REVIEW_ACCOUNT_INVALID", "账户不存在或已停用")
+            raise ApiError(422, "REVIEW_ACCOUNT_INVALID", "账户不存在、已停用或不可用于支付")
         data["accountName"] = account.name
     return ReviewFields.model_validate(data)
 
 
 def apply_patch(db: Session, user_id: uuid.UUID, current: ReviewFields, patch: VoicePatch):
-    before = validate_review(db, user_id, current).model_dump(by_alias=True)
+    before = validate_review(
+        db, user_id, current, retained_account_id=current.account_id
+    ).model_dump(by_alias=True)
     values = dict(before)
     notes = [text[:200] for text in patch.warnings if text.strip()]
     for key in ["amount", "expenseDate", "currencyCode", "merchant", "category", "note"]:
@@ -71,7 +77,9 @@ def apply_patch(db: Session, user_id: uuid.UUID, current: ReviewFields, patch: V
             candidate = ReviewFields.model_validate({**values, key: value})
             if key == "currencyCode" and value and value not in enabled_currency_codes(db, user_id):
                 raise ValueError("currency")
-            values = validate_review(db, user_id, candidate).model_dump(by_alias=True)
+            values = validate_review(
+                db, user_id, candidate, retained_account_id=current.account_id
+            ).model_dump(by_alias=True)
         except (ValidationError, ValueError, ApiError):
             notes.append(f"{key} 修改不明确或无效，已保留原值。")
     if patch.accountName is not None:
@@ -79,10 +87,8 @@ def apply_patch(db: Session, user_id: uuid.UUID, current: ReviewFields, patch: V
             values.update(accountId="", accountName="")
         else:
             matches = db.scalars(
-                select(Account).where(
-                    Account.user_id == user_id,
-                    Account.is_active.is_(True),
-                    Account.name == patch.accountName,
+                receipt_field_review.payment_accounts(user_id).where(
+                    Account.name == patch.accountName
                 )
             ).all()
             if len(matches) == 1:
@@ -154,12 +160,23 @@ async def infer_patch(payload: dict, settings: Settings, user_id: str) -> VoiceP
 
 
 async def correct(db: Session, user_id: uuid.UUID, request: CorrectionRequest, settings: Settings):
-    current = validate_review(db, user_id, request.values)
+    current = validate_review(
+        db, user_id, request.values, retained_account_id=request.values.account_id
+    )
     target = request.target_field
     if target in {"category", "currencyCode", "account"}:
         groups = {"category": "categories", "currencyCode": "currencies", "account": "accounts"}
         choices = receipt_field_review.options(db, user_id)[groups[target]]
         outcome, choice = receipt_field_review.match_choice(request.transcript, choices)
+        # Do not reinterpret an explicitly named disabled account as a similarly named
+        # eligible account. A clear instruction still follows the normal choice protocol.
+        disabled = (
+            target == "account"
+            and outcome != "clear"
+            and receipt_field_review.names_disabled_payment_account(db, user_id, request.transcript)
+        )
+        if disabled:
+            outcome, choice = "unmatched", None
         before = current.model_dump(by_alias=True)
         values = dict(before)
         warnings = []
@@ -169,10 +186,15 @@ async def correct(db: Session, user_id: uuid.UUID, request: CorrectionRequest, s
                 values.update(accountId=value, accountName="")
             else:
                 values[target] = value
-            values = validate_review(db, user_id, ReviewFields.model_validate(values)).model_dump(
-                by_alias=True
-            )
+            values = validate_review(
+                db,
+                user_id,
+                ReviewFields.model_validate(values),
+                retained_account_id=current.account_id,
+            ).model_dump(by_alias=True)
             outcome = "matched" if values != before else "unchanged"
+        elif disabled:
+            warnings = ["指定账户不可用于支付，请重新选择。"]
         else:
             warnings = [
                 "匹配到多个接近选项，请说出完整名称或更明确的选项。"
@@ -194,9 +216,7 @@ async def correct(db: Session, user_id: uuid.UUID, request: CorrectionRequest, s
                 "warnings": [],
                 "fieldOutcome": "unchanged",
             }
-    accounts = db.scalars(
-        select(Account).where(Account.user_id == user_id, Account.is_active.is_(True)).limit(100)
-    ).all()
+    accounts = db.scalars(receipt_field_review.payment_accounts(user_id).limit(100)).all()
     patch = await infer_patch(
         {
             "transcript": request.transcript,

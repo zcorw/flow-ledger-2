@@ -110,6 +110,9 @@ def validate_backup_payload(payload: dict[str, Any]) -> None:
             raise ValueError(f"备份缺少数据表：{table_name}")
         if any(not isinstance(row, dict) for row in rows):
             raise ValueError(f"备份数据表格式无效：{table_name}")
+    for row in tables["institutions"]:
+        if "can_be_payment_account" in row and type(row["can_be_payment_account"]) is not bool:
+            raise ValueError("Institution payment eligibility must be a boolean")
     account_ids = {str(row.get("id")) for row in tables["accounts"]}
     receipt_ids = set()
     for row in tables.get("receipts", []):
@@ -230,9 +233,12 @@ def create_backup(db: Session, user_id: uuid.UUID, purpose: str = "manual") -> B
 def _decoded_row(model: type[Any], raw: dict[str, Any]) -> dict[str, Any]:
     values: dict[str, Any] = {}
     for column in model.__table__.columns:
-        value = raw.get(
-            column.name, 0 if model is Receipt and column.name == "draft_revision" else None
-        )
+        default = None
+        if model is Receipt and column.name == "draft_revision":
+            default = 0
+        if model is Institution and column.name == "can_be_payment_account":
+            default = True
+        value = raw.get(column.name, default)
         if value is None:
             values[column.name] = None
         elif isinstance(column.type, Uuid):

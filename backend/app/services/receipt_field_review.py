@@ -7,10 +7,11 @@ from collections import Counter
 from difflib import SequenceMatcher
 from typing import get_args
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.asset import Account
+from app.models.institution import Institution
 from app.schemas.expense import ExpenseCategory
 from app.services.fx import enabled_currency_codes
 
@@ -43,13 +44,20 @@ CURRENCIES = {
 }
 
 
+def payment_accounts(user_id: uuid.UUID):
+    eligible_institutions = select(Institution.id).where(
+        Institution.user_id == user_id, Institution.can_be_payment_account.is_(True)
+    )
+    return select(Account).where(
+        Account.user_id == user_id,
+        Account.is_active.is_(True),
+        or_(Account.institution_id.is_(None), Account.institution_id.in_(eligible_institutions)),
+    )
+
+
 def options(db: Session, user_id: uuid.UUID) -> dict:
-    # Do not silently truncate accounts: every active owned choice is returned.
-    accounts = db.scalars(
-        select(Account)
-        .where(Account.user_id == user_id, Account.is_active.is_(True))
-        .order_by(Account.name, Account.id)
-    ).all()
+    # Do not silently truncate accounts: every eligible active owned choice is returned.
+    accounts = db.scalars(payment_accounts(user_id).order_by(Account.name, Account.id)).all()
     counts = Counter(a.name for a in accounts)
     return {
         "version": 1,
@@ -81,6 +89,30 @@ def normalized(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFKC", text).casefold() if c.isalnum())
 
 
+def choice_payload(text: str) -> str:
+    return re.sub(
+        r"^(?:请)?(?:把|将)?(?:分类|类别|币种|账户|支付方式)?(?:修改为|设置为|改为|改成|设为|选|用|是|为)?",
+        "",
+        text,
+    )
+
+
+def names_disabled_payment_account(db: Session, user_id: uuid.UUID, transcript: str) -> bool:
+    names = db.scalars(
+        select(Account.name)
+        .join(Institution, Institution.id == Account.institution_id)
+        .where(
+            Account.user_id == user_id,
+            Account.is_active.is_(True),
+            Institution.user_id == user_id,
+            Institution.can_be_payment_account.is_(False),
+        )
+    )
+    text = normalized(transcript)
+    exact = {text, choice_payload(text)} - {""}
+    return any(normalized(name) in exact for name in names)
+
+
 def match_choice(transcript: str, choices: list[dict]) -> tuple[str, dict | None]:
     text = normalized(transcript)
     if re.fullmatch(r"(?:请)?(?:把)?(?:分类|币种|账户|支付方式)?(?:清空|删除|留空)", text):
@@ -89,11 +121,7 @@ def match_choice(transcript: str, choices: list[dict]) -> tuple[str, dict | None
     if re.search(r"不(?:要|是|选|用|改|修改|设置)|别(?:用|选|改)|取消|或者|还是", text):
         return "ambiguous", None
     exact, contained, scores = [], [], []
-    payload = re.sub(
-        r"^(?:请)?(?:把|将)?(?:分类|类别|币种|账户|支付方式)?(?:修改为|设置为|改为|改成|设为|选|用|是|为)?",
-        "",
-        text,
-    )
+    payload = choice_payload(text)
     for choice in choices:
         names = {normalized(name) for name in [choice["label"], *choice["aliases"]] if name}
         if text in names or payload in names:

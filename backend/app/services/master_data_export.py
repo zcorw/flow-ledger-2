@@ -64,6 +64,7 @@ def build_master_data_export(db: Session, user_id: uuid.UUID) -> MasterDataExpor
             "institution_type",
             "display_color",
             "is_active",
+            "can_be_payment_account",
             "created_at",
             "updated_at",
         ],
@@ -74,6 +75,7 @@ def build_master_data_export(db: Session, user_id: uuid.UUID) -> MasterDataExpor
                 item.institution_type,
                 item.display_color or "",
                 str(item.is_active).lower(),
+                str(item.can_be_payment_account).lower(),
                 _timestamp(item.created_at),
                 _timestamp(item.updated_at),
             ]
