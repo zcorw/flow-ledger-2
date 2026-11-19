@@ -20,7 +20,7 @@ from app.models.audit import AuditLog
 from app.models.receipt_device import ReceiptDevice
 from app.schemas.receipt import ReceiptCandidate
 from app.schemas.receipt_review import ConfirmationRequest, CorrectionRequest, DraftRequest
-from app.services import receipt_confirmation, receipt_draft, receipt_review
+from app.services import receipt_confirmation, receipt_draft, receipt_field_review, receipt_review
 from app.services import receipt_device as devices
 
 Db = Annotated[Session, Depends(get_db)]
@@ -94,11 +94,17 @@ async def token(request: Request, response: Response, db: Db):
     return result
 
 
+@router.get("/review-options")
+def review_options(request: Request, db: Db):
+    grant = devices.authenticate_device(db, request.headers.get("authorization", ""))
+    return receipt_field_review.options(db, grant.user_id)
+
+
 @router.post("/review-correction")
 async def review_correction(request: Request, db: Db):
     authorization = request.headers.get("authorization", "")
     grant = devices.authenticate_device(db, authorization)
-    body = await read_json(request, {"transcript", "values"}, 16384)
+    body = await read_json(request, {"transcript", "values", "targetField"}, 16384)
     try:
         payload = CorrectionRequest.model_validate(body)
     except ValidationError:

@@ -1,5 +1,9 @@
 # 知产 (Zhichan)
 
+## Rokid Field Editing
+
+The paired backend adds `GET /review-options` (version 1; complete categories, enabled currencies and active owned accounts) and optional `targetField` on `POST /review-correction`. Scoped replies add `fieldOutcome`: `matched`, `unchanged`, `ambiguous` or `unmatched`. Client/server both enforce the field boundary. Enumerated fields use exact normalized labels/aliases, unique contained names, then conservative text similarity (at least 0.72 with a 0.15 lead); close competitors/negations require clarification. This is not general phonetic/semantic matching. Free fields use the existing model with an explicit target; other returned fields are discarded. There are no financial writes. Choices stay in memory and clear on hide/exit. Deploy this backend increment before installing the native package; unavailable/invalid choices fail explicitly. Existing requests without a target retain their earlier behavior. See [receipt review](docs/receipt-review-workflow.md).
+
 **English** | [简体中文](README.zh-CN.md)
 
 Zhichan (知产, formerly Flow Ledger) is a private, personal asset-management web application. Built around monthly snapshots, it brings institutions, accounts, asset items, historical exchange rates, receivables, and liabilities into one place. Balances in different currencies are converted to CNY, making it easy to track total assets, total liabilities, net worth, and month-over-month changes.

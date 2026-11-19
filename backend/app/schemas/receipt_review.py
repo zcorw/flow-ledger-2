@@ -1,6 +1,7 @@
 import re
 import uuid
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -44,11 +45,17 @@ class ReviewFields(BaseModel):
         return value
 
 
+ReviewTarget = Literal[
+    "merchant", "amount", "currencyCode", "category", "expenseDate", "account", "note"
+]
+
+
 class CorrectionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
 
     transcript: str = Field(min_length=1, max_length=1000)
     values: ReviewFields
+    target_field: ReviewTarget | None = Field(default=None, alias="targetField")
 
     @field_validator("transcript")
     @classmethod
