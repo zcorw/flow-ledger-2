@@ -32,6 +32,7 @@ HEADERS = {
         "account_name",
         "project_name",
         "institution_type",
+        "can_be_payment_account",
         "account_type",
         "asset_type",
         "currency_code",
@@ -130,6 +131,7 @@ RISK_LEVELS = {"low", "medium", "high"}
 REFERENCE_ROWS = {
     "institution_account_project": [
         "# 参考说明：以下以 # 开头的行仅提供可选值，导入时会自动忽略，可以保留",
+        "# can_be_payment_account：机构支付资格，可选 true/false；留空或旧模板缺列默认 true",
         "# record_type（记录类型）：institution（机构） | account（账户） | project（项目）",
         (
             "# institution_type（机构类型）：bank（银行） | broker（券商） | "
@@ -182,7 +184,12 @@ def template_csv(import_type: str) -> str:
     output = io.StringIO()
     writer = csv.writer(output, lineterminator="\n")
     writer.writerow(HEADERS[import_type])
-    writer.writerows(EXAMPLES[import_type])
+    examples = EXAMPLES[import_type]
+    if import_type == "institution_account_project":
+        examples = [
+            row[:5] + ["true" if row[0] == "institution" else ""] + row[5:] for row in examples
+        ]
+    writer.writerows(examples)
     writer.writerows([[reference] for reference in REFERENCE_ROWS[import_type]])
     return "\ufeff" + output.getvalue()
 
@@ -196,7 +203,11 @@ def parse_csv(
     except UnicodeDecodeError:
         return [], [{"row": 1, "field": "file", "reason": "文件必须使用 UTF-8 编码"}]
     reader = csv.DictReader(io.StringIO(text))
-    missing = [field for field in HEADERS[import_type] if field not in (reader.fieldnames or [])]
+    missing = [
+        field
+        for field in HEADERS[import_type]
+        if field not in (reader.fieldnames or []) and field != "can_be_payment_account"
+    ]
     if missing:
         return [], [{"row": 1, "field": field, "reason": "缺少必需列"} for field in missing]
     unexpected = [field for field in (reader.fieldnames or []) if field not in HEADERS[import_type]]
@@ -271,6 +282,8 @@ def _validate_hierarchy(
         if not institution_name:
             _error(errors, index, "institution_name", "不能为空")
         if record_type == "institution":
+            if row.get("can_be_payment_account", "").lower() not in {"", "true", "false"}:
+                _error(errors, index, "can_be_payment_account", "必须为 true 或 false")
             if row["institution_type"] not in INSTITUTION_TYPES:
                 _error(errors, index, "institution_type", "机构类型无效")
             if institution_name in existing_institutions or institution_name in new_institutions:
@@ -471,6 +484,7 @@ def _hierarchy(db: Session, user_id: uuid.UUID, rows: list[dict[str, str]]) -> N
                     user_id=user_id,
                     name=row["institution_name"],
                     institution_type=row["institution_type"],
+                    can_be_payment_account=row.get("can_be_payment_account", "").lower() != "false",
                     is_active=True,
                 )
                 db.add(item)

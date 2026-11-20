@@ -10,6 +10,7 @@ from app.schemas.asset import AccountResponse
 
 class ExpenseAccountResponse(AccountResponse):
     institution_name: str | None = None
+    can_be_payment_account: bool = True
 
 
 ExpenseCategory = Literal[

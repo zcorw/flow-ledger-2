@@ -260,7 +260,7 @@ test('unconfigured real backend disables uploads and preserves manual entry', as
   await expect(dialog.getByRole('button', { name: '确认保存', exact: true })).toBeEnabled();
 });
 
-test('payment account labels distinguish institutions and survive closing and editing', async ({ page }) => {
+test('payment accounts keep institution labels and remain visible in history after eligibility is disabled', async ({ page }) => {
   await login(page);
   const accounts: string[] = [];
   for (const name of ['Payment Bank A', 'Payment Bank B']) {
@@ -296,4 +296,31 @@ test('payment account labels distinguish institutions and survive closing and ed
   await expect(edit.getByLabel('支付账户（可选）')).toContainText('Payment Bank B');
   await edit.getByRole('button', { name: '返回（保留草稿）' }).click();
   await expect(edit).not.toBeVisible();
+
+  await page.goto('/institutions');
+  await page.getByRole('button', { name: '编辑机构 Payment Bank B' }).click();
+  const institutionDialog = page.getByRole('dialog', { name: '编辑机构' });
+  await expect(institutionDialog.getByRole('switch', { name: '可作为支付账户' })).toBeChecked();
+  await institutionDialog.getByRole('switch', { name: '可作为支付账户' }).uncheck();
+  await expect(institutionDialog.getByRole('switch', { name: '启用' })).toBeChecked();
+  await institutionDialog.getByRole('button', { name: '保存' }).click();
+  await expect(institutionDialog).not.toBeVisible();
+  await expect(page.getByText('不可作为支付账户', { exact: true })).toBeVisible();
+
+  await page.goto('/expenses');
+  await expect(page.getByRole('table').getByText('Payment Bank B · 资产账户 · 尾号 1234', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '记一笔', exact: true }).click();
+  await dialog.getByLabel('支付账户（可选）').click();
+  await expect(page.getByRole('option', { name: '不关联账户' })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Payment Bank A · 资产账户 · 尾号 1234', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: /Payment Bank B/ })).toHaveCount(0);
+  await page.getByRole('option', { name: '不关联账户' }).click();
+  await dialog.getByRole('button', { name: '返回（保留草稿）' }).click();
+
+  await page.getByRole('button', { name: '编辑开销 Payment label test' }).filter({ visible: true }).click();
+  await expect(edit.getByLabel('支付账户（可选）')).toContainText('仅保留历史关联');
+  await edit.getByLabel('备注（可选）').fill('Updated after payment eligibility was disabled');
+  await edit.getByRole('button', { name: '保存修改', exact: true }).click();
+  await expect(edit).not.toBeVisible();
+  await expect(page.getByRole('table').getByText('Payment Bank B · 资产账户 · 尾号 1234', { exact: true })).toBeVisible();
 });

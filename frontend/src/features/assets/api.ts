@@ -2,7 +2,7 @@ import { apiRequest } from '../../api/client';
 
 export type Institution = {
   id: string; name: string; institution_type: string; display_color: string | null;
-  is_active: boolean; account_count: number; project_count: number;
+  is_active: boolean; can_be_payment_account: boolean; account_count: number; project_count: number;
 };
 export type Account = {
   id: string; institution_id: string | null; name: string; account_type: string;
@@ -13,7 +13,7 @@ export type Project = {
   default_liquidity_level: string; default_risk_level: string; is_active: boolean; notes: string | null;
 };
 
-export type InstitutionInput = { name: string; institutionType: string; displayColor?: string; isActive: boolean };
+export type InstitutionInput = { name: string; institutionType: string; displayColor?: string; isActive: boolean; canBePaymentAccount: boolean };
 export type AccountInput = { institutionId?: string | null; name: string; accountType: string; maskedIdentifier?: string; displayColor?: string; isActive: boolean };
 export type ProjectInput = { accountId: string; name: string; assetType: string; currencyCode: string; defaultLiquidityLevel: string; defaultRiskLevel: string; isActive: boolean; notes?: string };
 

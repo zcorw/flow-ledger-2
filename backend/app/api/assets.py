@@ -125,6 +125,7 @@ def list_institutions(auth: CurrentAuthDependency, db: DbDependency) -> list[Ins
             id=item.id,
             name=item.name,
             institution_type=item.institution_type,
+            can_be_payment_account=item.can_be_payment_account,
             display_color=item.display_color,
             is_active=item.is_active,
             account_count=accounts,
@@ -169,7 +170,10 @@ def update_institution(
 ) -> InstitutionResponse:
     entity = _institution(db, auth.user.id, entity_id)
     before = InstitutionResponse.model_validate(entity).model_dump(mode="json")
-    for key, value in payload.model_dump().items():
+    updates = payload.model_dump()
+    if "can_be_payment_account" not in payload.model_fields_set:
+        updates.pop("can_be_payment_account")
+    for key, value in updates.items():
         setattr(entity, key, value)
     _commit(
         db,
@@ -178,7 +182,7 @@ def update_institution(
         entity_type="institution",
         entity_id=entity.id,
         before=before,
-        after=payload.model_dump(mode="json"),
+        after=InstitutionResponse.model_validate(entity).model_dump(mode="json"),
         conflict_code="INSTITUTION_NAME_EXISTS",
         conflict_message="同名机构已存在",
     )

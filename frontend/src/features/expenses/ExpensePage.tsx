@@ -18,7 +18,7 @@ import {
   categories, createExpense, deleteExpense, getExpenseAccounts, listExpenses, updateExpense,
   type Category, type Expense, type ExpenseFields, type Filters,
 } from './api';
-import { expenseAccountLabel } from './accountLabel';
+import { canSelectExpenseAccount, expenseAccountLabel } from './accountLabel';
 import { getReceiptStatus, recognizeReceipt, validateReceiptImage } from './ocr';
 import { formatExpenseAmount, localDate, validAmount, validCalendarDate } from './receiptParser';
 
@@ -157,6 +157,9 @@ export function ExpensePage() {
     <Button size="small" aria-label={`编辑开销 ${item.merchant || item.expense_date}`} onClick={() => edit(item)}>编辑</Button>
     <Button size="small" color="error" aria-label={`删除开销 ${item.merchant || item.expense_date}`} onClick={() => { remove.reset(); setDeleting(item); }}>删除</Button>
   </Stack>;
+  const availableAccounts = accounts.data?.filter((item) => canSelectExpenseAccount(item, editing?.account_id)) ?? [];
+  const selectedAccount = accounts.data?.find((item) => item.id === draft.accountId);
+  const selectedAccountUnavailable = selectedAccount && !canSelectExpenseAccount(selectedAccount, editing?.account_id);
   const availableCurrencies = currencies.data?.filter((item) => item.enabled || item.code === draft.currencyCode) ?? [];
 
   return <Stack spacing={2.5}>
@@ -252,8 +255,10 @@ export function ExpensePage() {
               {Object.entries(categories).map(([key, value]) => <MenuItem value={key} key={key}>{value}</MenuItem>)}
             </TextField>
             <TextField label="商户（可选）" value={draft.merchant ?? ''} onChange={(e) => changeDraft({ merchant: e.target.value })} slotProps={{ htmlInput: { maxLength: 150 } }} />
-            <TextField select label="支付账户（可选）" value={draft.accountId ?? ''} onChange={(e) => changeDraft({ accountId: e.target.value || null })} helperText="仅关联记录，不扣减余额">
-              <MenuItem value="">不关联账户</MenuItem>{accounts.data?.map((item) => <MenuItem key={item.id} value={item.id}>{expenseAccountLabel(item)}</MenuItem>)}
+            <TextField select label="支付账户（可选）" value={accounts.data ? draft.accountId ?? '' : ''} onChange={(e) => changeDraft({ accountId: e.target.value || null })} helperText={selectedAccountUnavailable ? '原账户已不可用于新开销，请改选账户或不关联。' : '仅关联记录，不扣减余额'}>
+              <MenuItem value="">不关联账户</MenuItem>
+              {selectedAccountUnavailable && <MenuItem value={selectedAccount.id} disabled>{expenseAccountLabel(selectedAccount)}（不可用于新开销）</MenuItem>}
+              {availableAccounts.map((item) => <MenuItem key={item.id} value={item.id}>{expenseAccountLabel(item)}{item.can_be_payment_account === false ? '（仅保留历史关联）' : ''}</MenuItem>)}
             </TextField>
             <TextField label="备注（可选）" multiline minRows={2} value={draft.note ?? ''} onChange={(e) => changeDraft({ note: e.target.value })} sx={{ gridColumn: '1 / -1' }} slotProps={{ htmlInput: { maxLength: 2000 } }} />
           </Box>

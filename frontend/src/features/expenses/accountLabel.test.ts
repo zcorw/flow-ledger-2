@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { expenseAccountLabel } from './accountLabel';
+import { canSelectExpenseAccount, expenseAccountLabel } from './accountLabel';
 import type { ExpenseAccount } from './api';
 
 const account: ExpenseAccount = {
@@ -7,6 +7,22 @@ const account: ExpenseAccount = {
   name: '资产账户', account_type: 'savings', masked_identifier: null,
   display_color: null, is_active: true, project_count: 0,
 };
+
+describe('expense account selection', () => {
+  it('keeps eligible, unassigned and legacy API accounts selectable', () => {
+    expect(canSelectExpenseAccount({ ...account, can_be_payment_account: true })).toBe(true);
+    expect(canSelectExpenseAccount({ ...account, institution_id: null, can_be_payment_account: true })).toBe(true);
+    expect(canSelectExpenseAccount(account)).toBe(true);
+  });
+
+  it('rejects newly selecting an ineligible account but preserves the existing expense relation', () => {
+    const excluded = { ...account, can_be_payment_account: false };
+    expect(canSelectExpenseAccount(excluded)).toBe(false);
+    expect(canSelectExpenseAccount(excluded, 'different-account')).toBe(false);
+    expect(canSelectExpenseAccount(excluded, excluded.id)).toBe(true);
+    expect(expenseAccountLabel(excluded)).toBe('Bank A · 资产账户');
+  });
+});
 
 describe('expense account labels', () => {
   it('distinguishes identically named accounts at different institutions', () => {

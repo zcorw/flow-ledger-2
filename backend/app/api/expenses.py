@@ -161,6 +161,18 @@ def _validate_links(
         select(Account.id).where(Account.id == payload.account_id, Account.user_id == user_id)
     ):
         raise ApiError(404, "ACCOUNT_NOT_FOUND", "关联账户不存在")
+    if payload.account_id is not None and (
+        previous is None or previous.account_id != payload.account_id
+    ):
+        linked_account = db.scalar(select(Account).where(Account.id == payload.account_id))
+        eligible = linked_account.institution_id is None or db.scalar(
+            select(Institution.can_be_payment_account).where(
+                Institution.id == linked_account.institution_id,
+                Institution.user_id == user_id,
+            )
+        ) is True
+        if not eligible:
+            raise ApiError(400, "ACCOUNT_NOT_PAYMENT_ELIGIBLE", "该机构不可作为支付账户")
     if payload.receipt_id is not None:
         receipt = db.scalar(
             select(Receipt).where(Receipt.id == payload.receipt_id, Receipt.user_id == user_id)
@@ -195,7 +207,7 @@ def _replay(item: Expense, digest: str) -> Expense:
 @router.get("/accounts", response_model=list[ExpenseAccountResponse])
 def expense_accounts(auth: CurrentAuthDependency, db: DbDependency):
     rows = db.execute(
-        select(Account, Institution.name)
+        select(Account, Institution.name, Institution.can_be_payment_account)
         .outerjoin(
             Institution,
             (Institution.id == Account.institution_id) & (Institution.user_id == auth.user.id),
@@ -207,8 +219,9 @@ def expense_accounts(auth: CurrentAuthDependency, db: DbDependency):
         ExpenseAccountResponse(
             **AccountResponse.model_validate(account).model_dump(),
             institution_name=institution_name,
+            can_be_payment_account=account.institution_id is None or eligible is True,
         )
-        for account, institution_name in rows
+        for account, institution_name, eligible in rows
     ]
 
 
